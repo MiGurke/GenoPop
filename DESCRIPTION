@@ -1,0 +1,18 @@
+Package: GenoPop
+Title: GenoPop
+Version: 0.0.0.9000
+Authors@R: 
+    person("Marie (Mick)", "Gurke", , "margurke@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0001-9901-424X"))
+Description: Package to calclulate population genomics stats from vcf files imported by vcfR.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.2.3
+Imports:
+    vcfR,
+    methods
+Suggests: 
+    testthat,
+    withr
+LazyData: true
