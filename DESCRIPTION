@@ -11,8 +11,13 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
 Imports:
     vcfR,
-    methods
+    methods,
+    Rcpp,
+    foreach,
+    doParallel,
+    parallel
 Suggests: 
     testthat,
     withr
 LazyData: true
+LinkingTo: Rcpp

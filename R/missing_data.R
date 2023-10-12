@@ -104,3 +104,106 @@ setGeneric("imputeMissingData", function(object, method = "mean") {
 setMethod("imputeMissingData", "vcfR", function(object, method = "mean") {
   imputeMissingData_int(object, method)
 })
+
+#' meanImputation
+#'
+#' @param matrix Seperated genotype matrix from myvcfR object.
+#'
+#' @return Matrix with imputed missing data.
+#'
+#' @examples
+#'
+#' @export
+
+meanImputation <- function(sep_gt) {
+  # Convert missing values ("." entries) to NA
+  sep_gt[sep_gt == "."] <- NA
+
+  # Convert the character matrix to a numeric matrix, coercing NA where appropriate
+  genotype_matrix <- matrix(as.numeric(sep_gt), nrow = nrow(sep_gt))
+
+  # Calculate the mean for each variant (row) excluding NAs
+  variant_means <- apply(genotype_matrix, 1, mean, na.rm = TRUE)
+
+  # Create a matrix of means with the same dimensions as the original data
+  mean_matrix <- matrix(rep(variant_means, each = ncol(genotype_matrix)),
+                        nrow = nrow(genotype_matrix),
+                        ncol = ncol(genotype_matrix),
+                        byrow = TRUE)
+
+  # Replace NAs in the original data with corresponding means
+  imputed_matrix <- ifelse(is.na(genotype_matrix), mean_matrix, genotype_matrix)
+  colnames(imputed_matrix) <- colnames(sep_gt)
+
+  # Round to nearest integer if necessary
+  imputed_matrix <- round(imputed_matrix)
+}
+
+#' knn_imputeR
+#'
+#' Description...
+#'
+#' @param data NumericMatrix, the data matrix.
+#' @param k Integer, the number of neighbors.
+#'
+#' @return NumericMatrix, the imputed data matrix.
+#' @export
+#'
+#' @examples
+#' knn_imputeR(matrix, k = 3)
+knn_imputeR <- function(data, k) {
+  GenoPop::knn_impute(data, k)
+}
+
+
+
+#' kNNImputation
+#'
+#' @param matrix A seperated genotype matrix from a myvcfR object.
+#'
+#' @return A number, sum of x and y.
+#' @export
+#'
+#' @examples
+#' kNNImputation(matrix)
+#'
+#' @export
+
+kNNImputation <- function(sep_gt, k = 3) {
+  # Convert missing values ("." entries) to NA
+  sep_gt[sep_gt == "."] <- NA
+
+  # Convert the character matrix to a numeric matrix, coercing NA where appropriate
+  genotype_matrix <- matrix(as.numeric(sep_gt), nrow = nrow(sep_gt))
+
+  num_cores <- detectCores() - 1
+  num_chunks <- num_cores
+  # Splitting matrix into chunks
+  chunk_size <- ceiling(nrow(genotype_matrix) / num_chunks)
+  chunks <- list()
+
+  for (i in seq_len(num_chunks)) {
+    start_row <- (i - 1) * chunk_size + 1
+    end_row <- min(i * chunk_size, nrow(genotype_matrix))
+    chunks[[i]] <- genotype_matrix[start_row:end_row, , drop = FALSE]
+  }
+
+  cl <- makeCluster(num_cores)
+  registerDoParallel(cl)
+  # Split matrix and perform imputation in parallel
+  imputed_chunks <- foreach(chunk = chunks, .packages = "GenoPop") %dopar% {
+    knn_impute(chunk, k)
+  }
+
+  # Stop the cluster
+  stopCluster(cl)
+
+  # Combine the chunks back into a single matrix
+  imputed_matrix <- do.call(rbind, imputed_chunks)
+
+  imputed_matrix[is.na(imputed_matrix)] <- "."
+  colnames(imputed_matrix) <- colnames(sep_gt)
+  return(imputed_matrix)
+}
+
+

@@ -1,5 +1,10 @@
 #' @importClassesFrom vcfR vcfR
 #' @importFrom methods new slotNames
+#' @importFrom foreach foreach %dopar%
+#' @importFrom doParallel registerDoParallel
+#' @importFrom parallel detectCores makeCluster stopCluster
+
+
 
 
 setClass("myVcfR",
