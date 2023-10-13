@@ -29,45 +29,73 @@ rmMissingData_int <- function(object, threshold = 0.1) {
   # Identify missing data
   missing_data_indices <- which(separated_gt_data == ".", arr.ind = TRUE)
 
-  # If missing data is present, manage it
-  if (length(missing_data_indices) > 0) {
-    # Count missing data per variant (row)
-    missing_data_count <- table(missing_data_indices[, 1])
+  if (threshold < 1) {
+    # If missing data is present, manage it
+    if (length(missing_data_indices) > 0) {
+      # Count missing data per variant (row)
+      missing_data_count <- table(missing_data_indices[, 1])
 
-    # Identify variants (rows) exceeding the missing data threshold
-    high_missing_data_variants <- as.numeric(names(missing_data_count[missing_data_count / (ploidy * num_inds) > threshold]))
+      # Identify variants (rows) exceeding the missing data threshold
+      high_missing_data_variants <- as.numeric(names(missing_data_count[missing_data_count / (ploidy * num_inds) > threshold]))
 
-    # Exclude variants (rows) with too much missing data
-    separated_gt_data <- separated_gt_data[-high_missing_data_variants, ]
-    gt_data <- gt_data[-high_missing_data_variants, ]
-    fix_data <- fix_data[-high_missing_data_variants, ]
+      # Exclude variants (rows) with too much missing data
+      separated_gt_data <- separated_gt_data[-high_missing_data_variants, ]
+      gt_data <- gt_data[-high_missing_data_variants, ]
+      fix_data <- fix_data[-high_missing_data_variants, ]
 
+    } else {
+      missing_data_count <- NULL
+      high_missing_data_variants <- NULL
+    }
+
+    # Calculate and output missing data per individual
+    individual_indices <- ceiling(missing_data_indices[, 2] / ploidy)
+    missing_data_per_individual <- table(individual_indices) / 2
+    names(missing_data_per_individual) <- colnames(gt_data)[as.numeric(names(missing_data_per_individual))]
+
+    missing_data = list(
+      count_per_variant = missing_data_count,
+      fraction_per_variant = missing_data_count / ncol(gt_data),
+      excluded_variants = high_missing_data_variants,
+      num_of_excluded_variants = length(high_missing_data_variants),
+      count_per_individual = missing_data_per_individual,
+      fraction_per_individual = missing_data_per_individual / nrow(gt_data)
+    )
+
+    object@missing_data <- missing_data
+    object@sep_gt <- separated_gt_data
+    object@gt <- gt_data
+    object@fix <- fix_data
+
+    message(paste0(as.character(length(high_missing_data_variants)), " SNPs removed because more then a fraction of ", as.character(threshold), " data was missing."))
   } else {
-    missing_data_count <- NULL
-    high_missing_data_variants <- NULL
+    # If missing data is present, manage it
+    if (length(missing_data_indices) > 0) {
+      # Count missing data per variant (row)
+      missing_data_count <- table(missing_data_indices[, 1])
+
+    } else {
+      missing_data_count <- NULL
+      high_missing_data_variants <- NULL
+    }
+
+    # Calculate and output missing data per individual
+    individual_indices <- ceiling(missing_data_indices[, 2] / ploidy)
+    missing_data_per_individual <- table(individual_indices) / 2
+    names(missing_data_per_individual) <- colnames(gt_data)[as.numeric(names(missing_data_per_individual))]
+
+    missing_data = list(
+      count_per_variant = missing_data_count,
+      fraction_per_variant = missing_data_count / ncol(gt_data),
+      count_per_individual = missing_data_per_individual,
+      fraction_per_individual = missing_data_per_individual / nrow(gt_data)
+    )
+
+    object@missing_data <- missing_data
+
   }
 
-  # Calculate and output missing data per individual
-  individual_indices <- ceiling(missing_data_indices[, 2] / ploidy)
-  missing_data_per_individual <- table(individual_indices) / 2
-  names(missing_data_per_individual) <- colnames(gt_data)[as.numeric(names(missing_data_per_individual))]
-
-  missing_data = list(
-    count_per_variant = missing_data_count,
-    fraction_per_variant = missing_data_count / ncol(gt_data),
-    excluded_variants = high_missing_data_variants,
-    num_of_excluded_variants = length(high_missing_data_variants),
-    count_per_individual = missing_data_per_individual,
-    fraction_per_individual = missing_data_per_individual / nrow(gt_data)
-  )
-
-  object@missing_data <- missing_data
-  object@sep_gt <- separated_gt_data
-  object@gt <- gt_data
-  object@fix <- fix_data
-
-  message(paste0(as.character(length(high_missing_data_variants)), " SNPs removed because more then a fraction of ", as.character(threshold), " data was missing."))
-  return(object)
+   return(object)
 }
 
 setGeneric("rmMissingData", function(object, threshold = 0.1) {
@@ -83,9 +111,9 @@ setMethod("rmMissingData", "vcfR", function(object, threshold = 0.1) {
 #' Remove variants from vcfR object with to much missing data.
 #'
 #' @param object A S4 object of class vcfR.
-#' @param threshold Fraction of missing individuals per variant that is still accepted. Default: 0.1
+#' @param method Method used for missing data imputation. Available are "kNN", "rf", and "mean". (Default = "mean")
 #'
-#' @return A S4 object of the same class, but without variants that did not meet the missingness threshold. In addition, the slot "missing_data" will be added to the object. It contains a list with information about the removed variants and the missingness per variant and individual.
+#' @return A S4 object of the same class, but the slot mis_gt is now filled with the imputed genotype matrix.
 #'
 #' @examples
 #' data("real", package = "GenoPop")
@@ -94,7 +122,18 @@ setMethod("rmMissingData", "vcfR", function(object, threshold = 0.1) {
 #' @export
 
 imputeMissingData_int <- function(object, method = "mean") {
- NULL
+ sep_gt <- object@sep_gt
+ if (method == "mean") {
+  imputed_matrix <- meanImputation(sep_gt)
+ } else if (method == "kNN") {
+  imputed_matrix <- kNNImputation(sep_gt)
+ } else if (method == "rf") {
+  imputed_matrix <- rfImputation(sep_gt)
+ } else {
+   error("Please provide a valid method! ('mean', 'kNN', 'rf')")
+ }
+ object@imp_gt <- imputed_matrix
+ return(object)
 }
 
 setGeneric("imputeMissingData", function(object, method = "mean") {
@@ -119,6 +158,9 @@ meanImputation <- function(sep_gt) {
   # Convert missing values ("." entries) to NA
   sep_gt[sep_gt == "."] <- NA
 
+  # Count NAs before imputation
+  na_count_before <- sum(is.na(sep_gt))
+
   # Convert the character matrix to a numeric matrix, coercing NA where appropriate
   genotype_matrix <- matrix(as.numeric(sep_gt), nrow = nrow(sep_gt))
 
@@ -134,6 +176,10 @@ meanImputation <- function(sep_gt) {
   # Replace NAs in the original data with corresponding means
   imputed_matrix <- ifelse(is.na(genotype_matrix), mean_matrix, genotype_matrix)
   colnames(imputed_matrix) <- colnames(sep_gt)
+
+  # Display message
+  message(paste0("mean was able to impute ", as.character(na_count_before)), " missing genotypes." )
+
 
   # Round to nearest integer if necessary
   imputed_matrix <- round(imputed_matrix)
@@ -282,11 +328,8 @@ rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000) {
   # Convert NAs to "."
   imputed_matrix[is.na(imputed_matrix)] <- "."
 
-  # Count NAs after imputation
-  na_count_after <- sum(imputed_matrix == ".")
-
   # Display message
-  message(paste0("Random Forest was able to impute ", as.character(na_count_before - na_count_after), " out of ", as.character(na_count_before)), " missing genotypes.")
+  message(paste0("Random Forest was able to impute ", as.character(na_count_before)), " missing genotypes.")
 
   # Naming columns
   colnames(imputed_matrix) <- colnames(sep_gt)

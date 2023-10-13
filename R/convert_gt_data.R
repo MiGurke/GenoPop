@@ -257,25 +257,30 @@ calculateAlleleFreqs_int <- function(object, missing_data = "none", ...) {
       remove_args$threshold <- 0.1  # Default value
     }
     object <- rmMissingData(object, remove_args$threshold)
-  }
+    separated_gt_data <- object@sep_gt
 
-  else if (missing_data == "impute") {
+  } else if (missing_data == "impute") {
     # Extract additional arguments for 'impute'
     impute_args <- list(...)
     # Check if 'imputation_method' is provided, if not use a default value
     if (!"method" %in% names(impute_args)) {
-      warning("Imputation method not provided for missing_data='impute'. Using default method 'mean'.")
-      impute_args$imputation_method <- "mean"  # Default value
+      stop("Please provide imputation method! method = 'mean', 'knn', or 'rf'")
     }
     # Ensure imputation_method is one of the allowed options
-    if (!impute_args$method %in% c("mean", "knn")) {
-      stop("Imputation method must be 'mean' or 'knn'")
+    if (!impute_args$method %in% c("mean", "kNN", "rf")) {
+      stop("Please provide imputation method! method = 'mean', 'knn', or 'rf'")
     }
-    message("Missing data imputation not yet implemented. Coming soon...")
+    # This is to calculate stats about the missing data without removing them.
+    object <- rmMissingData(object, 1)
+    object <- imputeMissingData_int(object, impute_args$method)
+    separated_gt_data <- object@imp_gt
+  } else if (missing_data == "none") {
+    # This is to calculate stats about the missing data without removing them.
+    object <- rmMissingData(object, 1)
+    separated_gt_data <- object@sep_gt
+  } else {
+    stop("Please provide a valid way to deal with missing data! ('none', 'remove', or 'impute')")
   }
-
-
-  separated_gt_data <- object@sep_gt
 
   # Calculate Allele Frequencies
   allele_frequencies_per_site <- vector("list", length = nrow(separated_gt_data))
