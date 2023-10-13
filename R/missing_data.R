@@ -159,9 +159,11 @@ knn_imputeR <- function(data, k) {
 
 #' kNNImputation
 #'
-#' @param matrix A seperated genotype matrix from a myvcfR object.
+#' @param sep_gt A seperated genotype matrix from a myvcfR object.
+#' @param k Number of nearest neighbours used for imputation, default: 3.
+#' @param chunk_size Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.
 #'
-#' @return A number, sum of x and y.
+#' @return A seperated genotype matrix from a myvcfR object, but with imputed missing values.
 #' @export
 #'
 #' @examples
@@ -217,4 +219,77 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000) {
   return(imputed_matrix)
 }
 
+#' rfImputation
+#'
+#' @param matrix A seperated genotype matrix from a myvcfR object.
+#'
+#' @return A seperated genotype matrix from a myvcfR object, but with imputed missing values.
+#' @export
+#'
+#' @examples
+#' rfImputation(matrix)
+#'
+#' @export
 
+rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000) {
+
+  # Convert missing values ("." entries) to NA
+  sep_gt[sep_gt == "."] <- NA
+
+  # Count NAs before imputation
+  na_count_before <- sum(is.na(sep_gt))
+
+  # Convert the character matrix to a numeric matrix, coercing NA where appropriate
+  genotype_matrix <- matrix(as.numeric(sep_gt), nrow = nrow(sep_gt), ncol = ncol(sep_gt))
+
+  # Determine the number of chunks and cores to use
+  num_rows <- nrow(genotype_matrix)
+  num_chunks <- ceiling(num_rows / chunk_size)
+  num_cores <- min(detectCores() - 1, num_chunks)
+
+  # Splitting matrix into chunks
+  chunks <- list()
+  for (i in seq_len(num_chunks)) {
+    start_row <- (i - 1) * chunk_size + 1
+    end_row <- min(i * chunk_size, num_rows)
+    chunks[[i]] <- genotype_matrix[start_row:end_row, , drop = FALSE]
+  }
+
+  # Initialize cluster
+  cl <- makeCluster(num_cores)
+  registerDoParallel(cl)
+
+  # Perform imputation in parallel
+  imputed_chunks <- foreach(chunk = chunks, .packages = "missForest") %dopar% {
+    # Perform missForest imputation on each chunk
+    imputed_chunk <- missForest(chunk, maxiter = maxiter, ntree = ntree)$ximp
+    print(typeof(imputed_chunk))
+    # Ensure imputed values are integers
+    imputed_chunk <- matrix(as.character(round(as.numeric(imputed_chunk))),
+                            ncol = ncol(imputed_chunk),
+                            nrow = nrow(imputed_chunk))
+
+    # Return imputed chunk
+    imputed_chunk
+  }
+
+  # Stop the cluster
+  stopCluster(cl)
+
+  # Combine the chunks back into a single matrix
+  imputed_matrix <- do.call(rbind, imputed_chunks)
+
+  # Convert NAs to "."
+  imputed_matrix[is.na(imputed_matrix)] <- "."
+
+  # Count NAs after imputation
+  na_count_after <- sum(imputed_matrix == ".")
+
+  # Display message
+  message(paste0("Random Forest was able to impute ", as.character(na_count_before - na_count_after), " out of ", as.character(na_count_before)), " missing genotypes.")
+
+  # Naming columns
+  colnames(imputed_matrix) <- colnames(sep_gt)
+
+  return(imputed_matrix)
+}

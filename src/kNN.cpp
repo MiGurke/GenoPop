@@ -114,6 +114,7 @@ NumericMatrix knn_impute(NumericMatrix data, int k) {
 
         if(weight_total > 0) {
           imputed_data(i, j) = std::round(weighted_sum / weight_total);
+          Rcpp::Rcout << "At position " << i << " " << j << " imp value is " << std::round(weighted_sum / weight_total) << "\n";
         // DEBUGGING
         // } else {
         //   Rcpp::Rcout << "Warning: No suitable neighbors found for imputation at (" << i << ", " << j << ").\n";
