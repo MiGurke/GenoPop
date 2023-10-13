@@ -169,27 +169,31 @@ knn_imputeR <- function(data, k) {
 #'
 #' @export
 
-kNNImputation <- function(sep_gt, k = 3) {
+kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000) {
   # Convert missing values ("." entries) to NA
   sep_gt[sep_gt == "."] <- NA
+  # Count NAs before imputation
+  na_count_before <- sum(is.na(sep_gt))
 
   # Convert the character matrix to a numeric matrix, coercing NA where appropriate
   genotype_matrix <- matrix(as.numeric(sep_gt), nrow = nrow(sep_gt))
 
-  num_cores <- detectCores() - 1
-  num_chunks <- num_cores
-  # Splitting matrix into chunks
-  chunk_size <- ceiling(nrow(genotype_matrix) / num_chunks)
-  chunks <- list()
+  # Determine the number of chunks and cores to use
+  num_rows <- nrow(genotype_matrix)
+  num_chunks <- ceiling(num_rows / chunk_size)
+  num_cores <- min(detectCores() - 1, num_chunks)
 
+  # Splitting matrix into chunks
+  chunks <- list()
   for (i in seq_len(num_chunks)) {
     start_row <- (i - 1) * chunk_size + 1
-    end_row <- min(i * chunk_size, nrow(genotype_matrix))
+    end_row <- min(i * chunk_size, num_rows)
     chunks[[i]] <- genotype_matrix[start_row:end_row, , drop = FALSE]
   }
 
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
+
   # Split matrix and perform imputation in parallel
   imputed_chunks <- foreach(chunk = chunks, .packages = "GenoPop") %dopar% {
     knn_impute(chunk, k)
@@ -202,6 +206,13 @@ kNNImputation <- function(sep_gt, k = 3) {
   imputed_matrix <- do.call(rbind, imputed_chunks)
 
   imputed_matrix[is.na(imputed_matrix)] <- "."
+
+  # Count NAs after imputation
+  na_count_after <- sum(imputed_matrix == ".")
+
+  # Display message
+  message(paste0("kNN was able to impute ", as.character(na_count_before - na_count_after), " out of ", as.character(na_count_before)), " missing genotypes." )
+
   colnames(imputed_matrix) <- colnames(sep_gt)
   return(imputed_matrix)
 }

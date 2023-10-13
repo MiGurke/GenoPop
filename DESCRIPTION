@@ -15,7 +15,8 @@ Imports:
     Rcpp,
     foreach,
     doParallel,
-    parallel
+    parallel,
+    missForest
 Suggests: 
     testthat,
     withr

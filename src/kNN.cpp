@@ -1,6 +1,9 @@
 #include <Rcpp.h>
 #include <cmath>  // for std::sqrt() and std::round()
 using namespace Rcpp;
+#include "annoy/src/annoylib.h"
+#include "annoy/src/kissrandom.h"
+using namespace Annoy;
 
 // Function to calculate distance considering missing data
 double calculate_distance(const NumericVector& instance1, const NumericVector& instance2) {
@@ -21,34 +24,55 @@ double calculate_distance(const NumericVector& instance1, const NumericVector& i
   return std::sqrt(sum) / valid_dims;
 }
 
-std::vector<int> find_k_neighbors(NumericMatrix data, int target_row, int k, double max_missing = 0.10) {
-  int num_rows = data.nrow();
-  int num_cols = data.ncol();
 
-  std::vector<std::pair<double, int>> distances;
+std::vector<int> find_k_neighbors(Rcpp::NumericMatrix data, int target_row, int k) {
+  int f = data.ncol();  // Number of features
+  AnnoyIndex<int, double, Euclidean, Kiss32Random, AnnoyIndexSingleThreadedBuildPolicy> index(f);
 
-  for(int i = 0; i < num_rows; ++i) {
-    int missing_count = 0;
 
-    for(int j = 0; j < num_cols; ++j) {
-      missing_count += R_IsNA(data(i, j));
-    }
-    double missing_proportion = (double)missing_count / num_cols;
-
-    if(i != target_row && missing_proportion <= max_missing) {
-      double dist = calculate_distance(data.row(target_row), data.row(i));
-      if(!std::isnan(dist)) {
-        distances.push_back({dist, i});
+  // Compute column means to replace NAs with as a temporary placeholder
+  // This is to deal with data sets that have large amounts of missing data
+  NumericVector means(f);
+  for(int j = 0; j < f; ++j) {
+    NumericVector col = data(_, j);
+    double sum = 0.0;
+    int count = 0;
+    for(int i = 0; i < col.size(); ++i) {
+      if(!R_IsNA(col[i])) {
+        sum += col[i];
+        ++count;
       }
     }
+    means[j] = count > 0 ? sum / count : NA_REAL;
   }
 
-  std::sort(distances.begin(), distances.end());
+  // Add all items to the index, replacing NAs with column means
+  for(int i = 0; i < data.nrow(); ++i) {
+    std::vector<double> item;
+    for(int j = 0; j < f; ++j) {
+      item.push_back(R_IsNA(data(i, j)) ? means[j] : data(i, j));
+    }
+    index.add_item(i, &item[0]);
+  }
 
+
+
+  // Build the index with 100 trees
+  index.build(100);
+
+  // Find the k + 1-nearest neighbors
   std::vector<int> neighbors;
-  for(int i = 0; i < std::min(k, (int)distances.size()); ++i) {
-    neighbors.push_back(distances[i].second);
-  }
+  index.get_nns_by_item(target_row, k + 1, -1, &neighbors, nullptr);
+  // Remove the first Neighbour, cause it'll be the target row itself
+  neighbors.erase(neighbors.begin());
+
+  // Print out the neighbors found (DEBUGGING)
+  // Rcpp::Rcout << "Neighbors of item " << target_row << ": ";
+  // for(int neighbor : neighbors) {
+  //   Rcpp::Rcout << neighbor << " ";
+  // }
+  // Rcpp::Rcout << std::endl;
+
   return neighbors;
 }
 
@@ -60,10 +84,24 @@ NumericMatrix knn_impute(NumericMatrix data, int k) {
   NumericMatrix imputed_data(clone(data));
 
   for(int i = 0; i < num_rows; ++i) {
+    // Check if the row has any NA
+    bool row_has_na = false;
     for(int j = 0; j < num_cols; ++j) {
       if(R_IsNA(data(i, j))) {
-        std::vector<int> neighbors = find_k_neighbors(data, i, k);
+        row_has_na = true;
+        break;
+      }
+    }
 
+    // If the row has NA, find its neighbors
+    std::vector<int> neighbors;
+    if(row_has_na) {
+      neighbors = find_k_neighbors(data, i, k);
+    }
+
+    // Perform the imputation
+    for(int j = 0; j < num_cols; ++j) {
+      if(R_IsNA(data(i, j))) {
         double weighted_sum = 0.0;
         double weight_total = 0.0;
         for(int neighbor_idx : neighbors) {
@@ -76,8 +114,9 @@ NumericMatrix knn_impute(NumericMatrix data, int k) {
 
         if(weight_total > 0) {
           imputed_data(i, j) = std::round(weighted_sum / weight_total);
-        } else {
-          Rcpp::Rcout << "Warning: No suitable neighbors found for imputation at (" << i << ", " << j << ").\n";
+        // DEBUGGING
+        // } else {
+        //   Rcpp::Rcout << "Warning: No suitable neighbors found for imputation at (" << i << ", " << j << ").\n";
         }
       }
     }
