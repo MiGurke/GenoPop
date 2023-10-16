@@ -354,7 +354,6 @@ rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000) {
     end_row <- min(i * chunk_size, num_rows)
     chunks[[i]] <- genotype_matrix[start_row:end_row, , drop = FALSE]
   }
-  print(chunks)
   # Initialize cluster
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
@@ -363,7 +362,6 @@ rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000) {
   imputed_chunks <- foreach(chunk = chunks, .packages = "missForest") %dopar% {
     # Perform missForest imputation on each chunk
     imputed_chunk <- missForest(chunk, maxiter = maxiter, ntree = ntree)$ximp
-    #print(typeof(imputed_chunk))
     # Ensure imputed values are integers
     imputed_chunk <- matrix(as.character(round(as.numeric(imputed_chunk))),
                             ncol = ncol(imputed_chunk),
