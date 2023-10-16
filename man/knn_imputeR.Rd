@@ -15,8 +15,9 @@ knn_imputeR(data, k)
 NumericMatrix, the imputed data matrix.
 }
 \description{
-Description...
+This is just the wrapper function for the kNN imputation algorithm that is written in C++. Please use the function kNNImputation().
 }
 \examples{
-knn_imputeR(matrix, k = 3)
+example_matrix <- matrix(c(0, 1, NA, 1, 1, NA, 0, 0, NA, 1, 1, NA, 0, 0, 0, 0, NA, 1, 0, 0, NA, 1, 1, NA, 0), nrow = 5, byrow = TRUE)
+knn_imputeR(example_matrix, k = 3)
 }

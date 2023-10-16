@@ -8,11 +8,11 @@
 #'
 #' @examples
 #' data("real", package = "GenoPop")
-#' vcf <- filterBiallelicSNPs_int(real)
+#' vcf <- filterBiallelicSNPs(real)
 #'
 #' @export
 
-filterBiallelicSNPs_int <- function(object) {
+filterBiallelicSNPs <- function(object) {
 # Extract fixed data
 fixed_data <- as.data.frame(object@fix)
 
@@ -36,16 +36,6 @@ object@fix <- object@fix[biallelic_indices,]
 return(object)
 }
 
-
-setGeneric("filterBiallelicSNPs", function(object, ...) {
-  standardGeneric("filterBiallelicSNPs")
-})
-
-setMethod("filterBiallelicSNPs", "vcfR", function(object) {
-  filterBiallelicSNPs_int(object)
-})
-
-
 #' calculatePloidyAndSepGT
 #'
 #' Calculate ploidy levels and separate the genotypes into a matrix according to the ploidy.
@@ -58,16 +48,16 @@ setMethod("filterBiallelicSNPs", "vcfR", function(object) {
 #'
 #' @examples
 #' data("real", package = "GenoPop")
-#' vcf <- calculatePloidyAndSepGT_int(real)
+#' vcf <- calculatePloidyAndSepGT(real)
 #' vcf@ploidy
 #' head(vcf@sep_gt)
 #'
 #' @export
 
-calculatePloidyAndSepGT_int <- function(object) {
+calculatePloidyAndSepGT <- function(object) {
 
   # Remove complex and multiallelic SNPs
-  object <- filterBiallelicSNPs_int(object)
+  object <- filterBiallelicSNPs(object)
   gt_data <- object@gt
   # Extract genotype data and exclude the "FORMAT" column
   if ("FORMAT" %in% colnames(gt_data)) {
@@ -126,13 +116,6 @@ calculatePloidyAndSepGT_int <- function(object) {
   return(new_object)
 }
 
-setGeneric("calculatePloidyAndSepGT", function(object, ...) {
-  standardGeneric("calculatePloidyAndSepGT")
-})
-
-setMethod("calculatePloidyAndSepGT", "vcfR", function(object) {
-  calculatePloidyAndSepGT_int(object)
-})
 
 #' seperateByPopulations
 #'
@@ -152,11 +135,11 @@ setMethod("calculatePloidyAndSepGT", "vcfR", function(object) {
 #' pop_assignments <- setNames(pop_names, individuals)
 #'
 #' data("real", package = "GenoPop")
-#' vcfs <- seperateByPopulations_int(real, pop_assignments)
+#' vcfs <- seperateByPopulations(real, pop_assignments)
 #'
 #' @export
 
-seperateByPopulations_int <- function(object, pop_assignments) {
+seperateByPopulations <- function(object, pop_assignments) {
   # Ensure names of pop_assignments match colnames of the vcf genotypic data
   if(!all(names(pop_assignments) %in% colnames(object@gt))) {
     stop("All individual names in pop_assignments must match those in the VCF.")
@@ -188,11 +171,8 @@ seperateByPopulations_int <- function(object, pop_assignments) {
 
     # Identify rows with only reference alleles for all individuals
     non_ref_rows <- apply(gt_values, 1, function(x) !all(x %in% c("0/0", "0|0")))
-    print(sum(!non_ref_rows))
-    print(nrow(gt_pop))
     # Filter @gt for non-reference genotypes
     gt_pop <- gt_pop[non_ref_rows, ]
-    print(nrow(gt_pop))
     # Common @meta slot
     meta_pop <- object@meta
 
@@ -210,14 +190,6 @@ seperateByPopulations_int <- function(object, pop_assignments) {
   return(vcf_by_pop)
 }
 
-setGeneric("seperateByPopulations", function(object, pop_assignments, ...) {
-  standardGeneric("seperateByPopulations")
-})
-
-setMethod("seperateByPopulations", "vcfR", function(object, pop_assignments) {
-  seperateByPopulations_int(object, pop_assignments)
-})
-
 
 
 #' calculateAlleleFreqs
@@ -225,7 +197,8 @@ setMethod("seperateByPopulations", "vcfR", function(object, pop_assignments) {
 #' Calculate allele frequencies from a vcfR object. Will also add the slots ploidy and sep_gt, if not already present.
 #'
 #' @param object A S4 object of class vcfR.
-#' @param missing_data Method to deal with missing data. Options are "remove", "impute", "none". Default is "none". In case of "remove", function needs the additional parameter threshold, which is the fraction of missing data in a variant taht is still acceptable. In case of "impute" the function needs the additional parameters "method", with which the imputation method can chosen. See \code{\link{imputeMissingData}}
+#' @param missing_data Method to deal with missing data. Options are "remove", "impute", "none". Default is "none". In case of "remove", function needs the additional parameter threshold, which is the fraction of missing data in a variant that is still acceptable. In case of "impute" the function needs the additional parameters "method", with which the imputation method can be chosen. See \code{\link{imputeMissingData}}
+#' @param ... Additional parameters for how to deal with missing data. For imputation see \code{\link{imputeMissingData}} and for removal see \code{\link{rmMissingData}}.
 #'
 #' @return A S4 object of the same class but with following slots added:
 #' * allele_freqs (data frame)
@@ -233,19 +206,19 @@ setMethod("seperateByPopulations", "vcfR", function(object, pop_assignments) {
 #'
 #' @examples
 #' data("real", package = "GenoPop")
-#' vcf <- calculateAlleleFreqs_int(real, missing_data = "none")
-#' vcf <- calculateAlleleFreqs_int(real, missing_data = "remove", threshold = 0.1)
-#' vcf <- calculateAlleleFreqs_int(real, missing_data = "impute", method = "mean")
+#' vcf <- calculateAlleleFreqs(real, missing_data = "none")
+#' vcf <- calculateAlleleFreqs(real, missing_data = "remove", threshold = 0.1)
+#' vcf <- calculateAlleleFreqs(real, missing_data = "impute", method = "mean")
 #' head(vcf@allele_freqs)
 #'
 #' @export
 
-calculateAlleleFreqs_int <- function(object, missing_data = "none", ...) {
+calculateAlleleFreqs <- function(object, missing_data = "none", ...) {
 
   # Check if needed slots are available, if not create them
   if (!inherits(object, "myVcfR") | !("ploidy" %in% slotNames(object)) | !("sep_gt" %in% slotNames(object))) {
     message("Calculating ploidy and separating genotype data...")
-    object <- calculatePloidyAndSepGT_int(object)
+    object <- calculatePloidyAndSepGT(object)
   }
 
   if (missing_data == "remove") {
@@ -253,7 +226,7 @@ calculateAlleleFreqs_int <- function(object, missing_data = "none", ...) {
     remove_args <- list(...)
     # Check if 'threshold' is provided, if not use a default value
     if (!"threshold" %in% names(remove_args)) {
-      warning("Threshold not provided for missing_data='remove'. Using default threshold of 0.1.")
+      message("Threshold not provided for missing_data='remove'. Using default threshold of 0.1.")
       remove_args$threshold <- 0.1  # Default value
     }
     object <- rmMissingData(object, remove_args$threshold)
@@ -264,15 +237,12 @@ calculateAlleleFreqs_int <- function(object, missing_data = "none", ...) {
     impute_args <- list(...)
     # Check if 'imputation_method' is provided, if not use a default value
     if (!"method" %in% names(impute_args)) {
-      stop("Please provide imputation method! method = 'mean', 'knn', or 'rf'")
-    }
-    # Ensure imputation_method is one of the allowed options
-    if (!impute_args$method %in% c("mean", "kNN", "rf")) {
-      stop("Please provide imputation method! method = 'mean', 'knn', or 'rf'")
+      message("No valid imputation method provided for missing_data='impute'. Will use method='mean' per default.")
+      impute_args$method = "mean"
     }
     # This is to calculate stats about the missing data without removing them.
     object <- rmMissingData(object, 1)
-    object <- imputeMissingData_int(object, impute_args$method)
+    object <- imputeMissingData(object, impute_args$method)
     separated_gt_data <- object@imp_gt
   } else if (missing_data == "none") {
     # This is to calculate stats about the missing data without removing them.
@@ -300,10 +270,3 @@ calculateAlleleFreqs_int <- function(object, missing_data = "none", ...) {
 
 }
 
-setGeneric("calculateAlleleFreqs", function(object, missing_data = "none", ...) {
-  standardGeneric("calculateAlleleFreqs")
-})
-
-setMethod("calculateAlleleFreqs", "vcfR", function(object, missing_data = "none", ...) {
-  calculateAlleleFreqs_int(object, missing_data, ...)
-})

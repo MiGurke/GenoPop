@@ -9,11 +9,11 @@
 #'
 #' @examples
 #' data("real", package = "GenoPop")
-#' vcf <- rmMissingData_int(real, 0.1)
+#' vcf <- rmMissingData(real, 0.1)
 #'
 #' @export
 
-rmMissingData_int <- function(object, threshold = 0.1) {
+rmMissingData <- function(object, threshold = 0.1) {
   # Check if needed slots are available, if not create them
   if (!inherits(object, "myVcfR") | !("ploidy" %in% slotNames(object)) | !("sep_gt" %in% slotNames(object))) {
     message("Calculating ploidy and separating genotype data...")
@@ -98,37 +98,64 @@ rmMissingData_int <- function(object, threshold = 0.1) {
    return(object)
 }
 
-setGeneric("rmMissingData", function(object, threshold = 0.1) {
-  standardGeneric("rmMissingData")
-})
-
-setMethod("rmMissingData", "vcfR", function(object, threshold = 0.1) {
-  rmMissingData_int(object, threshold)
-})
-
 #' imputeMissingData
 #'
-#' Remove variants from vcfR object with to much missing data.
+#' Impute missing variants in genotype data stored in vcfR object.
 #'
 #' @param object A S4 object of class vcfR.
-#' @param method Method used for missing data imputation. Available are "kNN", "rf", and "mean". (Default = "mean")
+#' @param method Method used for missing data imputation. Available are "kNN", "rf", and "mean". (Default = "mean").
+#' @param ... Additional parameters for different imputation methods. For more info look up the documentation of them:\code{\link{meanImputation}}, \code{\link{kNNImputation}}, \code{\link{rfImputation}}.
 #'
-#' @return A S4 object of the same class, but the slot mis_gt is now filled with the imputed genotype matrix.
+#' @return A S4 object of the same class, but the slot imp_gt is now filled with the imputed genotype matrix.
 #'
 #' @examples
 #' data("real", package = "GenoPop")
-#' vcf <- rmMissingData_int(real, 0.1)
+#' vcf <- imputeMissingData(real, method = "mean")
 #'
 #' @export
 
-imputeMissingData_int <- function(object, method = "mean") {
+imputeMissingData <- function(object, method = "mean", ...) {
+  # Check if needed slots are available, if not create them
+  if (!inherits(object, "myVcfR") | !("ploidy" %in% slotNames(object)) | !("sep_gt" %in% slotNames(object))) {
+    message("Calculating ploidy and separating genotype data...")
+    object <- calculatePloidyAndSepGT(object)
+  }
  sep_gt <- object@sep_gt
  if (method == "mean") {
-  imputed_matrix <- meanImputation(sep_gt)
+   # Extract additional arguments for 'mean'
+   mean_args <- list(...)
+   # Check if 'threshold' is provided, if not use a default value
+   if (!"mode" %in% names(mean_args)) {
+     message("No mode for mean imputation provided. Will use variant means per default.")
+     mean_args$mode <- "variant"  # Default value
+   }
+  imputed_matrix <- meanImputation(sep_gt, mode = mean_args$mode)
  } else if (method == "kNN") {
-  imputed_matrix <- kNNImputation(sep_gt)
+   kNN_args <- list(...)
+   if (!"k" %in% names(kNN_args)) {
+     message("No k for kNN imputation provided. Will use k=3 per default.")
+     kNN_args$k <- 3
+   }
+   if (!"chunk_size" %in% names(kNN_args)) {
+     message("No chunk size provided for kNN imputation. Will use chunk_size=1000 per default.")
+     kNN_args$chunk_size <- 1000
+  }
+  imputed_matrix <- kNNImputation(sep_gt, k = kNN_args$k, chunk_size = kNN_args$chunk_size)
  } else if (method == "rf") {
-  imputed_matrix <- rfImputation(sep_gt)
+   rf_args <- list(...)
+   if (!"maxiter" %in% rf_args){
+     message("No max number of refinment iterations provided for random forest imputation. Will use maxiter=10 per default.")
+     rf_args$maxiter <- 10
+   }
+   if (!"ntree" %in% rf_args){
+     message("No number of trees in the forest provided for random forest imputation. Will use ntree=100 per default.")
+     rf_args$ntree <- 100
+   }
+   if (!"chunk_size" %in% rf_args){
+     message("No chunk size provided for random forest imputation. Will use chunk_size=1000 per default.")
+     rf_args$chunk_size <- 1000
+   }
+  imputed_matrix <- rfImputation(sep_gt, maxiter = rf_args$maxiter, ntree = rf_args$ntree, chunk_size = rf_args$chunk_size)
  } else {
    error("Please provide a valid method! ('mean', 'kNN', 'rf')")
  }
@@ -136,58 +163,79 @@ imputeMissingData_int <- function(object, method = "mean") {
  return(object)
 }
 
-setGeneric("imputeMissingData", function(object, method = "mean") {
-  standardGeneric("imputeMissingData")
-})
-
-setMethod("imputeMissingData", "vcfR", function(object, method = "mean") {
-  imputeMissingData_int(object, method)
-})
-
 #' meanImputation
 #'
-#' @param matrix Seperated genotype matrix from myvcfR object.
+#' Use the mean over each variant or individual to replace missing data with that mean. Mean is rounded to keep genotype integers, so this just corresponds to the most often occuring genotyp.
+#'
+#' @param sep_gt Seperated genotype matrix from myvcfR object.
+#' @param mode Means are calculated either yb "variant" or by "individual".
 #'
 #' @return Matrix with imputed missing data.
 #'
 #' @examples
+#' example_matrix <- matrix(c("0", "1", ".", "1", "1", ".", "0", "0", ".", "1", "1", ".", "0", "0", "0", "0", ".", "1", "0", "0", ".", "1", "1", ".", "0"), nrow = 5, byrow = TRUE)
+#' meanImputation(example_matrix, mode ="variant")
+#' meanImputation(example_matrix, mode ="individual")
 #'
 #' @export
 
-meanImputation <- function(sep_gt) {
-  # Convert missing values ("." entries) to NA
-  sep_gt[sep_gt == "."] <- NA
+meanImputation <- function(sep_gt, mode = "variant") {
 
-  # Count NAs before imputation
-  na_count_before <- sum(is.na(sep_gt))
+  if (mode == "variant") {
+    # Convert missing values ("." entries) to NA
+    sep_gt[sep_gt == "."] <- NA
 
-  # Convert the character matrix to a numeric matrix, coercing NA where appropriate
-  genotype_matrix <- matrix(as.numeric(sep_gt), nrow = nrow(sep_gt))
+    # Count NAs before imputation
+    na_count_before <- sum(is.na(sep_gt))
 
-  # Calculate the mean for each variant (row) excluding NAs
-  variant_means <- apply(genotype_matrix, 1, mean, na.rm = TRUE)
+    # Convert the character matrix to a numeric matrix
+    genotype_matrix <- matrix(as.numeric(sep_gt), nrow = nrow(sep_gt))
 
-  # Create a matrix of means with the same dimensions as the original data
-  mean_matrix <- matrix(rep(variant_means, each = ncol(genotype_matrix)),
-                        nrow = nrow(genotype_matrix),
-                        ncol = ncol(genotype_matrix),
-                        byrow = TRUE)
+    # Calculate the mean for each variant (row) excluding NAs
+    variant_means <- apply(genotype_matrix, 1, mean, na.rm = TRUE)
 
-  # Replace NAs in the original data with corresponding means
-  imputed_matrix <- ifelse(is.na(genotype_matrix), mean_matrix, genotype_matrix)
-  colnames(imputed_matrix) <- colnames(sep_gt)
+    # Create a matrix of means with the same dimensions as the original data
+    mean_matrix <- matrix(rep(variant_means, each = ncol(genotype_matrix)),
+                          nrow = nrow(genotype_matrix),
+                          ncol = ncol(genotype_matrix),
+                          byrow = TRUE)
 
+    # Replace NAs in the original data with corresponding means
+    imputed_matrix <- ifelse(is.na(genotype_matrix), mean_matrix, genotype_matrix)
+    colnames(imputed_matrix) <- colnames(sep_gt)
+  } else if (mode == "individual") {
+    # Convert missing values ("." entries) to NA
+    sep_gt[sep_gt == "."] <- NA
+
+    # Count NAs before imputation
+    na_count_before <- sum(is.na(sep_gt))
+
+    # Convert the character matrix to a numeric matrix, coercing NA where appropriate
+    genotype_matrix <- matrix(as.numeric(sep_gt), nrow = nrow(sep_gt))
+
+    # Calculate the mean for each individual (column) excluding NAs
+    indiv_means <- apply(genotype_matrix, 2, mean, na.rm = TRUE)
+
+    # Create a matrix of means with the same dimensions as the original data
+    mean_matrix <- matrix(rep(indiv_means, each = ncol(genotype_matrix)),
+                          nrow = nrow(genotype_matrix),
+                          ncol = ncol(genotype_matrix),
+                          byrow = TRUE)
+
+    # Replace NAs in the original data with corresponding means
+    imputed_matrix <- ifelse(is.na(genotype_matrix), mean_matrix, genotype_matrix)
+    colnames(imputed_matrix) <- colnames(sep_gt)
+  }
   # Display message
   message(paste0("mean was able to impute ", as.character(na_count_before)), " missing genotypes." )
-
-
   # Round to nearest integer if necessary
   imputed_matrix <- round(imputed_matrix)
+  return(imputed_matrix)
 }
 
 #' knn_imputeR
 #'
-#' Description...
+#' This is just the wrapper function for the kNN imputation algorithm that is written in C++. Please use the function kNNImputation().
 #'
 #' @param data NumericMatrix, the data matrix.
 #' @param k Integer, the number of neighbors.
@@ -196,9 +244,11 @@ meanImputation <- function(sep_gt) {
 #' @export
 #'
 #' @examples
-#' knn_imputeR(matrix, k = 3)
+#' example_matrix <- matrix(c(0, 1, NA, 1, 1, NA, 0, 0, NA, 1, 1, NA, 0, 0, 0, 0, NA, 1, 0, 0, NA, 1, 1, NA, 0), nrow = 5, byrow = TRUE)
+#' knn_imputeR(example_matrix, k = 3)
+
 knn_imputeR <- function(data, k) {
-  GenoPop::knn_impute(data, k)
+  knn_impute(data, k)
 }
 
 
@@ -213,8 +263,8 @@ knn_imputeR <- function(data, k) {
 #' @export
 #'
 #' @examples
-#' kNNImputation(matrix)
-#'
+#' example_matrix <- matrix(c("0", "1", ".", "1", "1", ".", "0", "0", ".", "1", "1", ".", "0", "0", "0", "0", ".", "1", "0", "0", ".", "1", "1", ".", "0"), nrow = 5, byrow = TRUE)
+#' kNNImputation(example_matrix, k = 3, chunk_size = 1000)
 #' @export
 
 kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000) {
@@ -267,13 +317,17 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000) {
 
 #' rfImputation
 #'
-#' @param matrix A seperated genotype matrix from a myvcfR object.
+#' @param sep_gt A seperated genotype matrix from a myvcfR object.
+#' @param maxiter The number of improvement iterations the random forest algorithm (missForest) runs.
+#' @param ntree The number of decision trees in the random forest.
+#' @param chunk_size Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.
 #'
 #' @return A seperated genotype matrix from a myvcfR object, but with imputed missing values.
 #' @export
 #'
 #' @examples
-#' rfImputation(matrix)
+#' example_matrix <- matrix(c("0", "1", ".", "1", "1", ".", "0", "0", ".", "1", "1", ".", "0", "0", "0", "0", ".", "1", "0", "0", ".", "1", "1", ".", "0"), nrow = 5, byrow = TRUE)
+#' rfImputation(example_matrix, maxiter = 10, ntree = 100, chunk_size = 1000)
 #'
 #' @export
 
@@ -300,7 +354,7 @@ rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000) {
     end_row <- min(i * chunk_size, num_rows)
     chunks[[i]] <- genotype_matrix[start_row:end_row, , drop = FALSE]
   }
-
+  print(chunks)
   # Initialize cluster
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
@@ -309,7 +363,7 @@ rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000) {
   imputed_chunks <- foreach(chunk = chunks, .packages = "missForest") %dopar% {
     # Perform missForest imputation on each chunk
     imputed_chunk <- missForest(chunk, maxiter = maxiter, ntree = ntree)$ximp
-    print(typeof(imputed_chunk))
+    #print(typeof(imputed_chunk))
     # Ensure imputed values are integers
     imputed_chunk <- matrix(as.character(round(as.numeric(imputed_chunk))),
                             ncol = ncol(imputed_chunk),

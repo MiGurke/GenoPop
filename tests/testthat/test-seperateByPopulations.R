@@ -1,0 +1,17 @@
+test_that("seperateByPopulations works", {
+  mys <- c("8449", "8128", "8779", "8816", "8823", "8157")
+  dav <- c("8213", "8241", "8232", "8224", "10165", "8221", "8813", "8825", "8182", "8187")
+  individuals <- c(mys, dav)
+  pop_names <- c(rep("mys", length(mys)), rep("dav", length(dav)))
+  pop_assignments <- setNames(pop_names, individuals)
+
+  load(testthat::test_path("testdata", "real.RData"))
+  result <- seperateByPopulations(vcf, pop_assignments)
+  expect_true(class(result) == "list")
+  expect_s4_class(result$mys, "vcfR")
+  expect_s4_class(result$dav, "vcfR")
+  expect_false(is.null(result$mys@gt))
+  expect_false(is.null(result$dav@gt))
+  expect_true(nrow(result$mys@gt) <= nrow(vcf@gt))
+  expect_true(nrow(result$dav@gt) <= nrow(vcf@gt))
+})
