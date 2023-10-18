@@ -5,7 +5,7 @@
 \alias{sim}
 \title{The test data set called 'sim'}
 \format{
-VCF File format
+A vcfR object.
 }
 \usage{
 data("sim", package = "GenoPop")

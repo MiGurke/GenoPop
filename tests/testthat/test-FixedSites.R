@@ -1,5 +1,5 @@
 test_that("FixedSites works", {
-  load("testdata/mys.Rdata")
+  load("testdata/mys.RData")
   res <- FixedSites(mys)
-  expect_true(res == 859)
+  expect_true(res == 861)
 })

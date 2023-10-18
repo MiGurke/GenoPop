@@ -20,5 +20,5 @@ Imports:
 Suggests: 
     testthat,
     withr
-LazyData: true
+LazyData: false
 LinkingTo: Rcpp
