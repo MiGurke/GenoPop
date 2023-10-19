@@ -266,27 +266,25 @@ PrivateAlleles <- function(objects) {
   return(private_alleles_counts)
 }
 
-
-#' Heterozygosity
+#' Observed Heterozygosity
 #'
-#' This function calculates the observed and expected heterozygosity of a population.
+#' This function calculates the observed heterozygosity in a population.
 #'
-#' @param object An S4 object of type myVcfR. Allele frequencies must be present.
+#' @param object An S4 object of type myVcfR.
 #'
-#' @return A list containing observed and expected heterozygosity.
+#' @return Observed heterozygosity.
 #'
 #' @examples
 #' data("mys", package = "GenoPop")
-#' Heterozygosity(mys)
+#' ObservedHeterozygosity(mys)
 #'
 #' @export
 
-Heterozygosity <- function(object) {
-  # Extract the genotype matrix and allele frequencies
+ObservedHeterozygosity <- function(object) {
+  # Extract the genotype matrix
   sep <- object@sep_gt
   imp <- object@imp_gt
   genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
-  allele_freqs <- object@allele_freqs
 
   # Check if we actually found some genotype data
   if (is.null(genotype_matrix) || nrow(genotype_matrix) == 0) {
@@ -306,20 +304,46 @@ Heterozygosity <- function(object) {
   }
 
   Ho <- heterozygotes / (num_individuals * nrow(genotype_matrix))
+  return(Ho)
+}
 
-  # Calculate expected heterozygosity
+#' Expected Heterozygosity
+#'
+#' This function calculates the expected heterozygosity of a population.
+#'
+#' @param object An S4 object of type myVcfR. Allele frequencies must be present.
+#'
+#' @return Expected heterozygosity.
+#'
+#' @examples
+#' data("mys", package = "GenoPop")
+#' ExpectedHeterozygosity(mys)
+#'
+#' @export
+
+ExpectedHeterozygosity <- function(object) {
+  # Extract allele frequencies
+  allele_freqs <- object@allele_freqs
+
+  # Check if allele frequencies are present
+  if (is.null(allele_freqs) || nrow(allele_freqs) == 0) {
+    stop("No allele frequency data available in the object.")
+  }
+
+  # Calculate expected heterozygosity per locus
   He_per_locus <- apply(allele_freqs, 1, function(p) {
     1 - sum(p^2)
   })
+
   # Average over all loci
   He <- mean(He_per_locus)
 
-  return(list(observed_heterozygosity = Ho, expected_heterozygosity = He))
+  return(He)
 }
 
-#' WindowedPi
+#' Pi
 #'
-#' Calculate the average number of nucleotide differences per site between two sequences, for windows of specified length. The algorithm used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
+#' Calculate the average number of nucleotide differences per site between two sequences. The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
 #'
 #' @param object An S4 object of type myVcfR.
 #' @param window_size The size of the window for which Pi is calculated. (Default = 1000)
@@ -329,96 +353,53 @@ Heterozygosity <- function(object) {
 #'
 #' @examples
 #' data("mys", package = "GenoPop")
-#' WindowedPi(mys)
+#' Pi(mys)
 #'
 #' @export
 
-WindowedPi <- function(object, window_size = 1000, step_size = 0) {
-  # Extract the positions and the chromosomes
-  variant_positions <- as.numeric(object@fix[, 2])  # Assuming the second column contains positions
-  chromosomes <- object@fix[, 1]  # Assuming the first column contains chromosome names
-
-  # Extract the genotype matrix and allele frequencies
+Pi <- function(object, seq_length) {
+  # Assuming the object has slots for the genotype and other necessary data.
+  # Extract the genotype matrix from the object
   sep <- object@sep_gt
   imp <- object@imp_gt
   genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
 
-  # Check if we actually found some genotype data
-  if (is.null(genotype_matrix) || nrow(genotype_matrix) == 0) {
-    stop("No genotype data available in the object.")
-  }
-
-  # Determine the number of chromsomes (each individual has two chroms for diploid organisms)
+  N_mismatches_total <- 0
+  N_comparisons_total <- 0
   num_chroms <- ncol(genotype_matrix)
 
-  # Prepare a list to hold results
-  results <- list()
-
-  # We will calculate pi for each chromosome separately
-  unique_chromosomes <- unique(chromosomes)
-  for (chr in unique_chromosomes) {
-    # Get indices of the variants on this chromosome
-    chr_indices <- which(chromosomes == chr)
-    chr_positions <- variant_positions[chr_indices]
-
-    # Calculate the number of windows based on the step size and the positions of the variants
-    num_windows <- ceiling((max(chr_positions) - min(chr_positions)) / (step_size + window_size))
-    print(num_windows)
-    # Prepare a vector to store pi values for each window
-    windowed_pi <- numeric(num_windows)
-
-    # Loop over each window and calculate pi
-    for (i in seq_len(num_windows)) {
-      start_pos <- (i - 1) * (window_size + step_size)
-      end_pos <- start_pos + window_size
-      print(c(start_pos,end_pos))
-
-      # Get indices of variants within this window
-      window_indices <- which(chr_positions >= start_pos & chr_positions <= end_pos)
-      print(length(window_indices))
-      # If there are no variants in this window, skip the calculations
-      if (length(window_indices) == 0) {
-        windowed_pi[i] <- NA  # No data for this window
-        next
-      }
-
-      # Select the genotype data for these positions
-      window_genotypes <- genotype_matrix[chr_indices[window_indices], ]
-
-      # Calculate nucleotide diversity (pi) for this window
-      N_mismatches_total <- 0
-      N_comparisons_total <- 0
-
-      for (site_index in seq_len(nrow(window_genotypes))) {
-        site_genotypes <- window_genotypes[site_index, ]
-        site_allele_freqs <- table(site_genotypes)  # Allele frequencies at this site
-
-        # Total alleles at this site (not missing)
-        N_non_missing_chr <- sum(site_allele_freqs)
-
-        # Number of actual nucleotide differences (mismatches) for the site
-        N_site_mismatches <- 0
-        for (allele_count in site_allele_freqs) {
-          N_site_mismatches <- N_site_mismatches + (allele_count * (N_non_missing_chr - allele_count))
-        }
-
-        N_mismatches_total <- N_mismatches_total + N_site_mismatches
-        N_comparisons_total <- N_comparisons_total + (N_non_missing_chr * (N_non_missing_chr - 1))
-      }
-
-      # Pi calculation for the window, including monomorphic sites
-      N_monomorphic_sites <- window_size - length(window_indices)
-      N_pairs_total <- N_comparisons_total + (N_monomorphic_sites * num_chroms * (num_chroms - 1))
-      windowed_pi[i] <- N_mismatches_total / N_pairs_total
-    }
-
-    # Add the results for this chromosome to the results list
-    results[[chr]] <- windowed_pi
+  # Check if there are any variants in this window
+  if (nrow(genotype_matrix) == 0) {
+    # If no variants, the Pi is 0 for this window, considering only monomorphic sites
+    return(0)
   }
 
-  return(results)
-}
+  for (site_index in seq_len(nrow(genotype_matrix))) {
+    site_genotypes <- genotype_matrix[site_index, ]
+    site_allele_freqs <- table(site_genotypes)  # Allele frequencies at this site
 
+    # Total alleles at this site (not missing)
+    N_non_missing_chr <- sum(site_allele_freqs)
+
+    # Number of actual nucleotide differences (mismatches) for the site
+    N_site_mismatches <- 0
+    for (allele_count in site_allele_freqs) {
+      N_site_mismatches <- N_site_mismatches + (allele_count * (N_non_missing_chr - allele_count))
+    }
+
+    N_mismatches_total <- N_mismatches_total + N_site_mismatches
+    N_comparisons_total <- N_comparisons_total + (N_non_missing_chr * (N_non_missing_chr - 1))
+  }
+
+  # Including monomorphic sites
+  N_monomorphic_sites <- seq_length - nrow(genotype_matrix)
+  N_pairs_total <- N_comparisons_total + (N_monomorphic_sites * num_chroms * (num_chroms - 1))
+
+  # Pi calculation for the window
+  pi_value <- N_mismatches_total / N_pairs_total
+
+  return(pi_value)
+}
 
 #' Tajima's D
 #'
@@ -434,7 +415,7 @@ WindowedPi <- function(object, window_size = 1000, step_size = 0) {
 #'
 #' @export
 
-TajimasD <- function(object) {
+TajimasD <- function(object, seq_length) {
   # Extract the genotype matrix
   sep <- object@sep_gt
   imp <- object@imp_gt
@@ -448,22 +429,31 @@ TajimasD <- function(object) {
   # Calculate the number of segregating sites
   S <- SegregatingSites(object)
 
-  # Calculate average number of nucleotide differences (pi)
-  pi <- # ... [you need to implement the calculation for pi here, based on pairwise differences]
+  # Calculate number of nucleotide differences (pi)
+  pi <- Pi(object, seq_length)
 
-    # Calculate constants based on sample size
-  n <- ncol(genotype_matrix) / 2  # assuming diploid organisms
-  a1 <- sum(1 / (1:(n - 1)))
-  a2 <- sum(1 / (1:(n - 1))^2)
+  # Calculate constants based on sample size n
+  n <- ncol(genotype_matrix)
+  # Step 1: Calculate a1 and a2, which are summations used in the denominator of Tajima's D
+  # These summations are over 1/i and 1/i^2, respectively, from i = 1 to (n-1)
+  i_values <- 1:(n-1)
+  a1 <- sum(1 / i_values)
+  a2 <- sum(1 / (i_values^2))
+  # Step 2: Calculate b1 and b2, constants used for the estimation of the variance
   b1 <- (n + 1) / (3 * (n - 1))
-  b2 <- 2 * (n^2 + n + 3) / (9 * n * (n - 1))
+  b2 <- (2 * (n^2 + n + 3)) / (9 * n * (n - 1))
+  # Step 3: Calculate c1 and c2, which scale b1 and b2 by a1 and a2 to get the actual variance components
   c1 <- b1 - (1 / a1)
-  c2 <- b2 - (n + 2) / (a1 * n) + a2 / a1^2
+  c2 <- b2 - ((n + 2) / (a1 * n)) + (a2 / (a1^2))
+  # Step 4: Calculate e1 and e2, which are used in the denominator of Tajima's D
+  # These represent the expectations of the variance and covariance, respectively
   e1 <- c1 / a1
   e2 <- c2 / (a1^2 + a2)
-
-  # Calculate Tajima's D
-  D <- (pi - (S / a1)) / sqrt((e1 * S + e2 * S * (S - 1)) / (a1^2 + a2))
+  # Step 5: Calculate the denominator of Tajima's D, which is the square root of the variance of the difference between pi and S/a1
+  denominator <- sqrt((e1 * S) + (e2 * S * (S - 1)))
+  # Step 6: Calculate Tajima's D
+  # This is the difference between pi and the mean number of pairwise differences (S/a1), divided by the standard deviation (denominator)
+  D <- (pi - (S / a1)) / denominator
 
   return(D)
 }
