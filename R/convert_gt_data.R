@@ -272,7 +272,7 @@ calculateAlleleFreqs <- function(object, missing_data = "none", ...) {
 
 #' calculateWindowedMetric
 #'
-#' Calculate the average number of nucleotide differences per site between two sequences, for windows of specified length. The algorithm used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
+#' Calculate one of the population genomics metrics of this package on a per window basis over a longer sequence or even whole chromsomes and genomes. Calculations are done in parallel.
 #'
 #' @param object An S4 object of type myVcfR.
 #' @param window_size The size of the window for which Pi is calculated. (Default = 1000)
@@ -395,7 +395,7 @@ calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, 
 
 #' calculateTwoPopWindowedMetric
 #'
-#' Calculate the average number of nucleotide differences per site between two sequences, for windows of specified length. The algorithm used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
+#' Calculates on the two populations metrics in this package for windows over a longer sequence or even whole chromosomes and genomes. Calculations are done in parallel.
 #'
 #' @param objects An S4 object of type myVcfR.
 #' @param window_size The size of the window for which Pi is calculated. (Default = 1000)

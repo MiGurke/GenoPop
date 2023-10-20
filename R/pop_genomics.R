@@ -405,7 +405,7 @@ Pi <- function(object, seq_length) {
 #'
 #' Calculate Tajima's D statistic for a given dataset, a measure for neutrality.
 #'
-#' @param object An S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.
+#' @param object A S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.
 #'
 #' @return Tajima's D value.
 #'
@@ -430,7 +430,7 @@ TajimasD <- function(object, seq_length) {
   S <- SegregatingSites(object)
 
   # Calculate number of nucleotide differences (pi)
-  pi <- Pi(object, seq_length)
+  pi <- Pi(object, seq_length) * seq_length
 
   # Calculate constants based on sample size n
   n <- ncol(genotype_matrix)
@@ -458,5 +458,220 @@ TajimasD <- function(object, seq_length) {
   return(D)
 }
 
+#' WattersonsTheta
+#'
+#' Calculate Watterson's thea, a measure for neutrality, from an myVcfR object. The metric will be normalized by the sequence length to make it comparable between data sets.
+#'
+#' @param object A S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.
+#' @param seq_length The length of the sequence in the data set.
+#'
+#' @return Watterson's theta value.
+#'
+#' @examples
+#' data("mys", package = "GenoPop")
+#' WattersonsTheta(mys)
+#'
+#' @export
 
+WattersonsTheta <- function(object, seq_length) {
+  # Extract the genotype matrix
+  sep <- object@sep_gt
+  imp <- object@imp_gt
+  genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
 
+  # Check if there's actual genotype data
+  if (is.null(genotype_matrix) || nrow(genotype_matrix) == 0) {
+    stop("No genotype data available in the object.")
+  }
+
+  # Calculate the number of segregating sites
+  S <- SegregatingSites(object)
+  # Calculate constants based on sample size n
+  n <- ncol(genotype_matrix)
+  # The sum of the harmonic series until n-1
+  i_values <- 1:(n-1)
+  a1 <- sum(1 / i_values)
+  WattersonsTheta <- S / a1
+  return(WattersonsTheta / seq_length)
+}
+
+#' OneDimSFS
+#'
+#' Calculate a one dimensional site frequency spectrum from an myVcfR object.
+#'
+#' @param object A S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.
+#' @param folded Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned. For the unfolded it is assumed that the genotype "0" represents the ancestral state in the data. (Default is unfolded (FALSE).)
+#'
+#' @return Site frequency spectrum as a named vector
+#'
+#' @examples
+#' data("mys", package = "GenoPop")
+#' OneDimSFS(mys, folded = FALSE)
+#'
+#' @export
+
+OneDimSFS <- function(object, folded = FALSE) {
+  # Extract the genotype matrix
+  sep <- object@sep_gt
+  imp <- object@imp_gt
+  genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
+
+  # Replace '.' with NA for missing data
+  genotype_matrix[genotype_matrix == "."] <- NA
+
+  # Convert the entire matrix to numeric in a vectorized manner
+  genotype_matrix_numeric <- as.matrix(apply(genotype_matrix, c(1, 2), as.numeric))
+
+  # Number of individuals (assuming diploid, so 2 columns per individual)
+  num_individuals <- ncol(genotype_matrix) / 2
+
+  # Initialize a vector to hold the site frequency spectrum
+  sfs <- numeric(num_individuals + 1)  # frequencies from 0 to num_individuals
+
+  # Iterate over the sites in the genotype matrix
+  for (i in 1:nrow(genotype_matrix_numeric)) {
+    site_data <- genotype_matrix_numeric[i, ]
+
+    # Exclude missing data for this site
+    valid_data <- site_data[!is.na(site_data)]
+
+    # Count the number of derived alleles (assuming '1' is the derived state)
+    derived_count <- sum(valid_data)
+
+    # Calculate the minor allele count for folded SFS
+    if (folded) {
+      allele_count <- min(derived_count, length(valid_data) - derived_count)
+    } else {
+      allele_count <- derived_count
+    }
+
+    # Adjust the total number of alleles based on missing data
+    total_alleles_at_site <- length(valid_data)
+
+    # Skip sites with no valid data
+    if (total_alleles_at_site == 0) next
+
+    # Calculate the frequency, adjusting for the varying number of valid alleles
+    freq_index <- allele_count * (num_individuals) / total_alleles_at_site
+
+    # Round to the nearest integer to get the discrete frequency category
+    freq_category <- round(freq_index) + 1  # R is 1-indexed
+
+    # Update the SFS
+    sfs[freq_category] <- sfs[freq_category] + 1
+  }
+
+  # Name the vector elements for clearer interpretation
+  names(sfs) <- 0:num_individuals
+  # For a folded SFS, remove the redundant second half of the vector
+  if (folded) {
+    # Determine the midpoint of the vector
+    midpoint <- ceiling((num_individuals + 1) / 2)
+    # Keep only up to the midpoint (inclusive)
+    sfs <- sfs[1:midpoint]
+  }
+
+  return(sfs)
+}
+
+#' TwoDimSFS
+#'
+#' Calculate a two-dimensional site frequency spectrum from a list of two myVcfR objects.
+#'
+#' @param objects A list of two S4 objects of type myVcfR. Allele frequencies and genotype matrices must be present.
+#' @param folded Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned. (Default is unfolded (FALSE).)
+#'
+#' @return Two-dimensional site frequency spectrum as a matrix
+#'
+#' @examples
+#' data("mys", package = "GenoPop")
+#' data("dav", package = "GenoPop")
+#' TwoDimSFS(list(mys, dav), folded = TRUE)
+#'
+#' @export
+
+TwoDimSFS <- function(objects, folded = FALSE) {
+  if (length(objects) != 2) {
+    stop("Please provide a list of two myVcfR objects.")
+  }
+
+  # Extract the variant information
+  variant_info1 <- objects[[1]]@fix
+  variant_info2 <- objects[[2]]@fix
+
+  # Extract the genotype matrices
+  sep1 <- objects[[1]]@sep_gt
+  imp1 <- objects[[1]]@imp_gt
+  genotype_matrix1 <- if (is.null(imp1) || nrow(imp1) == 0) sep1 else imp1
+  sep2 <- objects[[2]]@sep_gt
+  imp2 <- objects[[2]]@imp_gt
+  genotype_matrix2 <- if (is.null(imp2) || nrow(imp2) == 0) sep2 else imp2
+
+  # Replace '.' with NA for missing data and convert to numeric
+  genotype_matrix1[genotype_matrix1 == "."] <- NA
+  genotype_matrix1 <- as.matrix(apply(genotype_matrix1, c(1, 2), as.numeric))
+
+  genotype_matrix2[genotype_matrix2 == "."] <- NA
+  genotype_matrix2 <- as.matrix(apply(genotype_matrix2, c(1, 2), as.numeric))
+
+  # Create a unified set of variants based on chromosome and position
+  common_variants <- merge(variant_info1, variant_info2, by = c("CHROM", "POS"), all = TRUE)
+
+  # Number of individuals (assuming diploid, so 2 columns per individual)
+  num_individuals1 <- ncol(genotype_matrix1) / 2
+  num_individuals2 <- ncol(genotype_matrix2) / 2
+
+  # Initialize a matrix to hold the 2d site frequency spectrum
+  sfs_2d <- matrix(0, nrow = num_individuals1 + 1, ncol = num_individuals2 + 1)
+
+  # Process each common variant
+  for (i in 1:nrow(common_variants)) {
+    chrom <- common_variants[i, "CHROM"]
+    pos <- common_variants[i, "POS"]
+
+    # Find the index of this variant in each dataset
+    idx1 <- which(variant_info1[,"CHROM"] == chrom & variant_info1[,"POS"] == pos)
+    idx2 <- which(variant_info2[,"CHROM"] == chrom & variant_info2[,"POS"] == pos)
+
+    # If the variant is missing in a dataset, we assume it's monomorphic there
+    site_data1 <- if (length(idx1) == 1) genotype_matrix1[idx1, ] else rep(0, 2 * num_individuals1)
+    site_data2 <- if (length(idx2) == 1) genotype_matrix2[idx2, ] else rep(0, 2 * num_individuals2)
+
+    # Exclude missing data for this site
+    valid_data1 <- site_data1[!is.na(site_data1)]
+    valid_data2 <- site_data2[!is.na(site_data2)]
+
+    # Count the number of derived alleles (assuming '1' is the derived state)
+    derived_count1 <- sum(valid_data1)
+    derived_count2 <- sum(valid_data2)
+
+    # Calculate the minor allele count for folded SFS
+    if (folded) {
+      allele_count1 <- min(derived_count1, length(valid_data1) - derived_count1)
+      allele_count2 <- min(derived_count2, length(valid_data2) - derived_count2)
+    } else {
+      allele_count1 <- derived_count1
+      allele_count2 <- derived_count2
+    }
+    total_alleles_at_site1 <- length(valid_data1)
+    total_alleles_at_site2 <- length(valid_data2)
+    # Calculate the frequency, adjusting for the varying number of valid alleles
+    freq_index1 <- allele_count1 * (num_individuals1) / total_alleles_at_site1
+    freq_index2 <- allele_count2 * (num_individuals2) / total_alleles_at_site2
+
+    # Round to the nearest integer to get the discrete frequency category
+    freq_category1 <- round(freq_index1) + 1  # R is 1-indexed
+    freq_category2 <- round(freq_index2) + 1
+
+    # Update the 2dSFS
+    sfs_2d[freq_category1, freq_category2] <- sfs_2d[freq_category1, freq_category2] + 1
+  }
+
+  # If the SFS is folded, remove the empty categories.
+  if (folded) {
+    sfs_2d <- sfs_2d[rowSums(sfs_2d[,-1]) != 0,]
+    sfs_2d <- sfs_2d[,colSums(sfs_2d[-1,]) != 0]
+  }
+
+  return(sfs_2d)
+}
