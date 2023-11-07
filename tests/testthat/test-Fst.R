@@ -1,11 +1,12 @@
-test_that("PrivateAlleles works", {
-  load("testdata/mys.RData")
+test_that("Fst works", {
   mys1 <- c("8449", "8128", "8779")
   mys2 <- c("8816", "8823", "8157")
+
   individuals <- c(mys1, mys2)
   pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
   pop_assignments <- setNames(pop_names, individuals)
-  res <- PrivateAlleles(mys, pop_assignments)
-  expect_true(res[[1]] == 1381 && res[[2]] == 199)
 
+  load(testthat::test_path("testdata", "mys.RData"))
+  res <- Fst(mys, pop_assignments)
+  expect_true(round(res, digits = 3) == 0.071)
 })

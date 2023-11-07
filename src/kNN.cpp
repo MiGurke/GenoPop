@@ -111,7 +111,10 @@ NumericMatrix knn_impute(NumericMatrix data, int k) {
             weight_total += weight;
           }
         }
-
+        // Only impute if the neighbors actually had any data for this individual/allele/column.
+        // (Weight won't be increased from neighbours that have missing data at the position. See above.)
+        // If not its kinda pointless to impute this. This is the reason, why  this algorithm may not impute all missing values.
+        // Especially if there are individuals with high proportions of missing data.
         if(weight_total > 0) {
           imputed_data(i, j) = std::round(weighted_sum / weight_total);
           Rcpp::Rcout << "At position " << i << " " << j << " imp value is " << std::round(weighted_sum / weight_total) << "\n";

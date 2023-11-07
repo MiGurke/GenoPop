@@ -4,12 +4,14 @@
 \alias{seperateByPopulations}
 \title{seperateByPopulations}
 \usage{
-seperateByPopulations(object, pop_assignments)
+seperateByPopulations(object, pop_assignments, rm_ref_alleles = TRUE)
 }
 \arguments{
-\item{object}{A S4 object of class vcfR.}
+\item{object}{A S4 object of class vcfR or myVcfR.}
 
 \item{pop_assignments}{A named vector. Elements are the population names and names are the individual name.}
+
+\item{rm_ref_alleles}{Logical, wether variants that only have the reference allele should be removed from the respective subpopulations object. (Default = TRUE)}
 }
 \value{
 A list containing one vcfR object per population.

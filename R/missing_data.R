@@ -139,25 +139,41 @@ imputeMissingData <- function(object, method = "mean", ...) {
    if (!"chunk_size" %in% names(kNN_args)) {
      message("No chunk size provided for kNN imputation. Will use chunk_size=1000 per default.")
      kNN_args$chunk_size <- 1000
-  }
-  imputed_matrix <- kNNImputation(sep_gt, k = kNN_args$k, chunk_size = kNN_args$chunk_size)
+   }
+   if (!"write_log" %in% names(kNN_args)) {
+     kNN_args$write_log <- FALSE
+   }
+   if (!"logfile" %in% names(kNN_args)) {
+     kNN_args$logfile <- "log_kNN.txt"
+   }
+   if (!"chunk_size" %in% names(kNN_args)) {
+     message("No chunk size provided for kNN imputation. Will use chunk_size=1000 per default.")
+     kNN_args$chunk_size <- 1000
+   }
+  imputed_matrix <- kNNImputation(sep_gt, k = kNN_args$k, chunk_size = kNN_args$chunk_size, write_log = kNN_args$write_log, logfile = kNN_args$logfile)
  } else if (method == "rf") {
    rf_args <- list(...)
-   if (!"maxiter" %in% rf_args){
+   if (!"maxiter" %in% names(rf_args)){
      message("No max number of refinment iterations provided for random forest imputation. Will use maxiter=10 per default.")
      rf_args$maxiter <- 10
    }
-   if (!"ntree" %in% rf_args){
+   if (!"ntree" %in% names(rf_args)){
      message("No number of trees in the forest provided for random forest imputation. Will use ntree=100 per default.")
      rf_args$ntree <- 100
    }
-   if (!"chunk_size" %in% rf_args){
+   if (!"chunk_size" %in% names(rf_args)){
      message("No chunk size provided for random forest imputation. Will use chunk_size=1000 per default.")
      rf_args$chunk_size <- 1000
    }
-  imputed_matrix <- rfImputation(sep_gt, maxiter = rf_args$maxiter, ntree = rf_args$ntree, chunk_size = rf_args$chunk_size)
+   if (!"write_log" %in% names(rf_args)) {
+     rf_args$write_log <- FALSE
+   }
+   if (!"logfile" %in% names(rf_args)) {
+     rf_args$logfile <- "log_rf.txt"
+   }
+  imputed_matrix <- rfImputation(sep_gt, maxiter = rf_args$maxiter, ntree = rf_args$ntree, chunk_size = rf_args$chunk_size, write_log = rf_args$write_log, logfile = rf_args$logfile)
  } else {
-   error("Please provide a valid method! ('mean', 'kNN', 'rf')")
+   stop("Please provide a valid method! ('mean', 'kNN', 'rf')")
  }
  object@imp_gt <- imputed_matrix
  return(object)
@@ -258,6 +274,8 @@ knn_imputeR <- function(data, k) {
 #' @param sep_gt A seperated genotype matrix from a myvcfR object.
 #' @param k Number of nearest neighbours used for imputation, default: 3.
 #' @param chunk_size Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.
+#' @param write_log Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.
+#' @param logfile Name of the log file, if write_log is true.
 #'
 #' @return A seperated genotype matrix from a myvcfR object, but with imputed missing values.
 #' @export
@@ -267,7 +285,7 @@ knn_imputeR <- function(data, k) {
 #' kNNImputation(example_matrix, k = 3, chunk_size = 1000)
 #' @export
 
-kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000) {
+kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, write_log = FALSE, logfile = "logfile.txt") {
   # Convert missing values ("." entries) to NA
   sep_gt[sep_gt == "."] <- NA
   # Count NAs before imputation
@@ -289,12 +307,45 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000) {
     chunks[[i]] <- genotype_matrix[start_row:end_row, , drop = FALSE]
   }
 
+
+  # Initiate parallel backend
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
 
+  #Create log file and prepare progress tracking if write log is true
+  if (write_log) {
+    message(paste0("Preparing log file ", logfile))
+    # Function to safely write to a log file
+    log_progress <- function(message, log_file) {
+      # Obtain a lock on the file to avoid write conflicts
+      fileConn <- file(log_file, open = "a")
+      tryCatch({
+        # Write the progress message
+        writeLines(message, con = fileConn)
+      }, finally = {
+        # Release the file lock
+        close(fileConn)
+      })
+    }
+    file.create(logfile)
+    # Adding identifiers to each matrix
+    chunks <- lapply(1:length(chunks), function(i) {
+      list(id = i, matrix = chunks[[i]])
+    })
+  }
+
   # Split matrix and perform imputation in parallel
   imputed_chunks <- foreach(chunk = chunks, .packages = "GenoPop") %dopar% {
-    knn_impute(chunk, k)
+    # Computation with and without log file
+    if(write_log){
+      mc <- chunk$matrix
+      id <- chunk$id
+      result <- knn_impute(mc, k)
+      log_progress(paste0(Sys.time(), " Completed task ", id, " of ", num_chunks, "."), logfile)
+    } else {
+      result <- knn_impute(chunk, k)
+    }
+    return(result)
   }
 
   # Stop the cluster
@@ -321,6 +372,8 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000) {
 #' @param maxiter The number of improvement iterations the random forest algorithm (missForest) runs.
 #' @param ntree The number of decision trees in the random forest.
 #' @param chunk_size Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.
+#' @param write_log Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.
+#' @param logfile Name of the log file, if write_log is true.
 #'
 #' @return A seperated genotype matrix from a myvcfR object, but with imputed missing values.
 #' @export
@@ -331,7 +384,7 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000) {
 #'
 #' @export
 
-rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000) {
+rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000, write_log = FALSE, logfile = "logfile.txt") {
 
   # Convert missing values ("." entries) to NA
   sep_gt[sep_gt == "."] <- NA
@@ -354,21 +407,56 @@ rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000) {
     end_row <- min(i * chunk_size, num_rows)
     chunks[[i]] <- genotype_matrix[start_row:end_row, , drop = FALSE]
   }
+
+  #Create log file and prepare progress tracking if write log is true
+  if (write_log) {
+    message(paste0("Preparing log file ", logfile))
+    # Function to safely write to a log file
+    log_progress <- function(message, log_file) {
+      # Obtain a lock on the file to avoid write conflicts
+      fileConn <- file(log_file, open = "a")
+      tryCatch({
+        # Write the progress message
+        writeLines(message, con = fileConn)
+      }, finally = {
+        # Release the file lock
+        close(fileConn)
+      })
+    }
+    file.create(logfile)
+    # Adding identifiers to each matrix
+    chunks <- lapply(1:length(chunks), function(i) {
+      list(id = i, matrix = chunks[[i]])
+    })
+  }
+
   # Initialize cluster
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
 
   # Perform imputation in parallel
   imputed_chunks <- foreach(chunk = chunks, .packages = "missForest") %dopar% {
-    # Perform missForest imputation on each chunk
-    imputed_chunk <- missForest(chunk, maxiter = maxiter, ntree = ntree)$ximp
-    # Ensure imputed values are integers
-    imputed_chunk <- matrix(as.character(round(as.numeric(imputed_chunk))),
-                            ncol = ncol(imputed_chunk),
-                            nrow = nrow(imputed_chunk))
-
-    # Return imputed chunk
-    imputed_chunk
+    # Do computation with or without writing progress to log file
+    if (write_log) {
+      mc <- chunk$matrix
+      id <- chunk$id
+      # Perform missForest imputation on each chunk
+      imputed_chunk <- missForest(mc, maxiter = maxiter, ntree = ntree)$ximp
+      # Ensure imputed values are integers
+      imputed_chunk <- matrix(as.character(round(as.numeric(imputed_chunk))),
+                              ncol = ncol(imputed_chunk),
+                              nrow = nrow(imputed_chunk))
+      log_progress(paste0(Sys.time(), " Completed task ", id, " of ", num_chunks, "."), logfile)
+      return(imputed_chunk)
+    } else {
+      # Perform missForest imputation on each chunk
+      imputed_chunk <- missForest(chunk, maxiter = maxiter, ntree = ntree)$ximp
+      # Ensure imputed values are integers
+      imputed_chunk <- matrix(as.character(round(as.numeric(imputed_chunk))),
+                              ncol = ncol(imputed_chunk),
+                              nrow = nrow(imputed_chunk))
+      return(imputed_chunk)
+    }
   }
 
   # Stop the cluster

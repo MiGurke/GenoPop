@@ -8,24 +8,38 @@ calculateWindowedMetric(
   object,
   metricFunction,
   window_size = 1000,
-  step_size = 0
+  step_size = 0,
+  min_var = 2,
+  pop_assignments = NULL,
+  write_log = FALSE,
+  logfile = "logfile.txt"
 )
 }
 \arguments{
 \item{object}{An S4 object of type myVcfR.}
 
+\item{metricFunction}{One of the population genomics metrics functions included in this package.}
+
 \item{window_size}{The size of the window for which Pi is calculated. (Default = 1000)}
 
 \item{step_size}{The size of the step in between windows. (Default = 0)}
+
+\item{min_var}{Minimum number of variants that must be present in a window to calculate the metric. Default is set to 2, because many metrics break if there is only one or none variant to work with.}
+
+\item{pop_assignments}{If the metric is calculated from two populations (f.e. Fst, private alleles, etc.) then on has to provide a named vector. Elements are the population names and names are the individual name.}
+
+\item{write_log}{Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.}
+
+\item{logfile}{Name of the log file, if write_log is true.}
 }
 \value{
-The nucleotide diversity (pi) per window in data frame.
+A data frame with four columns, the window chromosome, the window start and end postion, the number of variants in the window, and the value of the metric.
 }
 \description{
-Calculate the average number of nucleotide differences per site between two sequences, for windows of specified length. The algorithm used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
+Calculate one of the population genomics metrics of this package on a per window basis over a longer sequence or even whole chromsomes and genomes. Calculations are done in parallel.
 }
 \examples{
 data("mys", package = "GenoPop")
-WindowedPi(mys)
+calculateWindowedMetric(mys, Pi, window_size = 10000)
 
 }

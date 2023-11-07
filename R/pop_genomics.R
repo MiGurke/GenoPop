@@ -168,102 +168,53 @@ SingeltonSites <- function(object) {
   return(num_singleton_sites)
 }
 
+
 #' PrivateAlleles
 #'
-#' Count the number of private alleles in each of several populations. These are alleles found exclusively in one population and not in the others.
+#' Function to calculate the number of private alleles in  two populations.
 #'
-#' @param objects A list of S4 objects of type myVcfR, each representing a different population. Allele frequencies must be present.
+#' @param object A myVcfR object.
+#' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
 #'
 #' @return A list containing the number of private alleles for each population.
 #'
 #' @examples
+#' mys1 <- c("8449", "8128", "8779")
+#' mys2 <- c("8816", "8823", "8157")
+#'
+#' individuals <- c(mys1, mys2)
+#' pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
+#' pop_assignments <- setNames(pop_names, individuals)
+#'
 #' data("mys", package = "GenoPop")
-#' data("dav", package = "GenoPop")
-#' PrivateAlleles(list(mys, dav))
+#' PrivateAlleles(mys, pop_assignments)
 #'
 #' @export
 
-PrivateAlleles <- function(objects) {
-  # Ensure that objects is indeed a list of multiple populations
-  if (length(objects) < 2) {
-    stop("Please provide two or more population objects.")
-  }
+PrivateAlleles <- function(object, pop_assignments) {
 
-  # Initialize a list to store positions, chromosomes, and genotype matrices from all populations
-  all_positions <- list()
-  all_chromosomes <- list()
-  genotype_matrices <- list()
+  # Use the pop_assignments vector to separate the populations
+  separated_pops <- seperateByPopulations(object, pop_assignments, rm_ref_alleles = TRUE)
+  pop1 <- separated_pops[[1]]
+  pop2 <- separated_pops[[2]]
 
-  # Extract data from each object
-  for (i in seq_along(objects)) {
-    object <- objects[[i]]
+  # Extract and store positions and chromosomes for both populations
+  positions_pop1 <- pop1@fix[,2]  # assuming the 2nd column is 'POS'
+  chromosomes_pop1 <- pop1@fix[,1]  # assuming the 1st column is 'CHROM'
+  positions_pop2 <- pop2@fix[,2]  # assuming the 2nd column is 'POS'
+  chromosomes_pop2 <- pop2@fix[,1]  # assuming the 1st column is 'CHROM'
 
-    # Extract and store genotype matrix
-    sep <- object@sep_gt
-    imp <- object@imp_gt
-    genotype_matrices[[i]] <- if (is.null(imp) || nrow(imp) == 0) sep else imp
+  # Combine chromosomes and positions into a unique site identifier for both populations
+  sites_pop1 <- paste(chromosomes_pop1, positions_pop1, sep=":")
+  sites_pop2 <- paste(chromosomes_pop2, positions_pop2, sep=":")
 
-    # Extract and store positions and chromosomes
-    all_positions[[i]] <- object@fix[,2]  # assuming the 2nd column is 'POS'
-    all_chromosomes[[i]] <- object@fix[,1]  # assuming the 1st column is 'CHROM'
-  }
+  # Identify private alleles by finding unique sites in each population
+  private_sites_pop1 <- setdiff(sites_pop1, sites_pop2)
+  private_sites_pop2 <- setdiff(sites_pop2, sites_pop1)
 
-  # Check if we actually found some genotype data in each object
-  for (genotype_matrix in genotype_matrices) {
-    if (is.null(genotype_matrix) || nrow(genotype_matrix) == 0) {
-      stop("No genotype data available in one or more of the objects.")
-    }
-  }
-
-  # Combine all chromosomes and positions to identify unique and shared sites
-  combined_chromosomes_positions <- list()
-
-  for (i in seq_along(all_positions)) {
-    combined_chromosomes_positions[[i]] <- paste(all_chromosomes[[i]], all_positions[[i]], sep = ":")
-  }
-
-  unique_combined_sites <- Reduce(union, combined_chromosomes_positions)
-
-  # Initialize a list to keep track of private alleles count for each population
-  private_alleles_counts <- rep(0, length(objects))
-
-  # Check each site in the combined set
-  for (site in unique_combined_sites) {
-    # Split chromosome and position
-    site_info <- strsplit(site, ":")[[1]]
-    chromosome <- site_info[1]
-    position <- as.numeric(site_info[2])
-
-    # Store unique alleles from all populations for the current site
-    unique_alleles_all_pops <- lapply(seq_along(all_positions), function(i) {
-      # Find indices where chromosome and position match
-      indices <- which(all_chromosomes[[i]] == chromosome & all_positions[[i]] == position)
-      if (length(indices) > 0) {
-        unique(genotype_matrices[[i]][indices, ])
-        } else {
-          character(0)
-        }
-    })
-
-    # Count private alleles for each population at this site
-    for (i in seq_along(unique_alleles_all_pops)) {
-      other_pops <- unique_alleles_all_pops[-i]  # all populations except the current one
-      combined_other_pops <- Reduce(union, other_pops)  # combine alleles from other populations
-
-      # Identifying private alleles
-      private_alleles <- setdiff(unique_alleles_all_pops[[i]], combined_other_pops)
-
-      # Exclude the reference allele, assumed to be '0'
-      private_alleles <- private_alleles[private_alleles != "0"]
-
-      # Update counts
-      private_alleles_counts[i] <- private_alleles_counts[i] + length(private_alleles)
-    }
-  }
-
-  # Prepare the results to be returned, associating each count with the corresponding population
-  names(private_alleles_counts) <- paste0('pop', seq_along(private_alleles_counts))
-  return(private_alleles_counts)
+  # Return the count of private alleles as a named vector
+  private_alleles_count <- c(pop1 = length(private_sites_pop1), pop2 = length(private_sites_pop2))
+  return(private_alleles_count)
 }
 
 #' Observed Heterozygosity
@@ -307,6 +258,7 @@ ObservedHeterozygosity <- function(object) {
   return(Ho)
 }
 
+
 #' Expected Heterozygosity
 #'
 #' This function calculates the expected heterozygosity of a population.
@@ -346,14 +298,13 @@ ExpectedHeterozygosity <- function(object) {
 #' Calculate the average number of nucleotide differences per site between two sequences. The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
 #'
 #' @param object An S4 object of type myVcfR.
-#' @param window_size The size of the window for which Pi is calculated. (Default = 1000)
-#' @param step_size The size of the step in between windows. (Default = 0)
+#' @param seq_length Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.
 #'
 #' @return The nucleotide diversity (pi) per window in data frame.
 #'
 #' @examples
 #' data("mys", package = "GenoPop")
-#' Pi(mys)
+#' Pi(mys, 265392)
 #'
 #' @export
 
@@ -406,12 +357,13 @@ Pi <- function(object, seq_length) {
 #' Calculate Tajima's D statistic for a given dataset, a measure for neutrality.
 #'
 #' @param object A S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.
+#' @param seq_length Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.
 #'
 #' @return Tajima's D value.
 #'
 #' @examples
 #' data("mys", package = "GenoPop")
-#' TajimasD(mys)
+#' TajimasD(mys, 265392)
 #'
 #' @export
 
@@ -469,7 +421,7 @@ TajimasD <- function(object, seq_length) {
 #'
 #' @examples
 #' data("mys", package = "GenoPop")
-#' WattersonsTheta(mys)
+#' WattersonsTheta(mys, 265392)
 #'
 #' @export
 
@@ -493,6 +445,139 @@ WattersonsTheta <- function(object, seq_length) {
   a1 <- sum(1 / i_values)
   WattersonsTheta <- S / a1
   return(WattersonsTheta / seq_length)
+}
+
+#' Fst
+#'
+#' Calculate the mean or weighted (by number of non missing chromsomes) fixiation index (Fst) from two populations in a list of myVcfR objects using the method of Weir and Cockerham (1984).
+#'
+#' @param object A myVcfR object.
+#' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
+#' @param weighted Logical, wether weighted Fst or mean Fst is returned. (Default = FALSE (mean Fst is returned))
+#'
+#' @return Fst value.
+#'
+#' @examples
+#' mys1 <- c("8449", "8128", "8779")
+#' mys2 <- c("8816", "8823", "8157")
+#'
+#' individuals <- c(mys1, mys2)
+#' pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
+#' pop_assignments <- setNames(pop_names, individuals)
+#'
+#' data("mys", package = "GenoPop")
+#' Fst(mys, pop_assignments)
+#'
+#' @export
+
+Fst <- function(object, pop_assignments, weighted = FALSE) {
+  # Check for necessary components in the object
+  if (!all(c("sep_gt", "allele_freqs") %in% slotNames(object))) {
+    stop("The object does not have the necessary components.")
+  }
+
+  # Separate the populations
+  separated_pops <- seperateByPopulations(object, pop_assignments, rm_ref_alleles = FALSE)
+  pop1 <- separated_pops[[1]]
+  pop2 <- separated_pops[[2]]
+
+  # Extract the genotype matrices
+  sep1 <- pop1@sep_gt
+  imp1 <- pop1@imp_gt
+  genotype_matrix1 <- if (is.null(imp1) || nrow(imp1) == 0) sep1 else imp1
+  sep2 <- pop2@sep_gt
+  imp2 <- pop2@imp_gt
+  genotype_matrix2 <- if (is.null(imp2) || nrow(imp2) == 0) sep2 else imp2
+
+  # Extract allele frequencies
+  allele_freqs1 <- pop1@allele_freqs
+  allele_freqs2 <- pop2@allele_freqs
+
+  # Ensure both matrices have the same number of columns by adding zeros if necessary
+  # This can happen if one population has f.e. only the reference allele for all positions.
+  # Especially when used in small windows for the windowed metric calculation.
+  if (ncol(allele_freqs1) != ncol(allele_freqs2)) {
+    max_cols <- max(ncol(allele_freqs1), ncol(allele_freqs2))
+    if (ncol(allele_freqs1) < max_cols) {
+      missing_cols <- setdiff(0:(max_cols - 1), colnames(allele_freqs1))
+      for (col in missing_cols) {
+        allele_freqs1 <- cbind(allele_freqs1, 0)
+        colnames(allele_freqs1)[ncol(allele_freqs1)] <- as.character(col)
+      }
+    }
+    if (ncol(allele_freqs2) < max_cols) {
+      missing_cols <- setdiff(0:(max_cols - 1), colnames(allele_freqs2))
+      for (col in missing_cols) {
+        allele_freqs2 <- cbind(allele_freqs2, 0)
+        colnames(allele_freqs2)[ncol(allele_freqs2)] <- as.character(col)
+      }
+    }
+  }
+
+  # Calculate average allele frequencies across populations
+  mean_freqs <- (allele_freqs1 + allele_freqs2) / 2
+
+  if (nrow(genotype_matrix1) < 5){
+    print(mean_freqs)
+  }
+
+  # Determine the number of loci
+  num_loci <- nrow(allele_freqs1)
+
+  Fsts <- c()  # Initialize a vector to hold Fst values for each locus
+  weights <- c() # Initialize a vector to hold the weights for each locus
+
+  # Loop through each locus and calculate components of genetic variance
+  for (i in 1:num_loci) {
+    # Get the number of non-missing chromosomes
+    n1 <- length(genotype_matrix1[i,genotype_matrix1[i,] != "."])
+    n2 <- length(genotype_matrix2[i,genotype_matrix2[i,] != "."])
+
+    # Get all the allele frequencies
+    p1 <- as.numeric(allele_freqs1[i, 1])  # frequency of allele 1 in population 1
+    p2 <- as.numeric(allele_freqs2[i, 1])  # frequency of allele 1 in population 2
+    q1 <- 1 - p1  # frequency of allele 2 in population 1
+    q2 <- 1 - p2  # frequency of allele 2 in population 2
+
+    p_bar <- as.numeric(mean_freqs[i, 1])  # average frequency of allele 1
+    q_bar <- 1 - p_bar  # average frequency of allele 2
+
+    # Calculate the expected homozygosity within each population for this locus
+    h1 <- p1^2 + q1^2
+    h2 <- p2^2 + q2^2
+
+    # Calculate the sample variances for this locus
+    s1 <- p1 * q1 / (n1 - 1)  # sample variance in population 1
+    s2 <- p2 * q2 / (n2 - 1)  # sample variance in population 2
+
+    # Calculate components of genetic variance for this locus
+    a <- ((p1 - p_bar)^2 + (p2 - p_bar)^2) / 2 - (s1 + s2) / 2  # among populations
+    b <- ((s1 + s2) / 2) - ((1 / (2 * n1)) * (p1 * (1 - p1) + p2 * (1 - p2)) / 2)  # between individuals within populations
+    c <- (1 / 2) * ((p1 * (1 - p1) + p2 * (1 - p2)) / 2)  # within individuals
+
+    # Calculate Fst for this locus
+    Fst_locus <- a / (a + b + c)
+    # Consider negative Fst's to be 0, because they are an artifact of uneven sample sizes.
+    if (!is.na(Fst_locus) && Fst_locus < 0) {
+      Fst_locus <- 0
+    }
+    if (weighted) {
+      weights <- c(weights, (n1+n2))
+    }
+    #print(Fst_locus)
+    Fsts <- c(Fsts, Fst_locus)
+  }
+
+  if (weighted) {
+    fst_weighted_products <- Fsts * weights
+    sum_weighted_products <- sum(fst_weighted_products, na.rm = TRUE)
+    sum_weights <- sum(weights, na.rm = TRUE)
+    Fst_final <- sum_weighted_products / sum_weights
+  } else {
+    Fst_final <- mean(Fsts, na.rm = TRUE)
+  }
+
+  return(Fst_final)
 }
 
 #' OneDimSFS

@@ -4,7 +4,13 @@
 \alias{kNNImputation}
 \title{kNNImputation}
 \usage{
-kNNImputation(sep_gt, k = 3, chunk_size = 1000)
+kNNImputation(
+  sep_gt,
+  k = 3,
+  chunk_size = 1000,
+  write_log = FALSE,
+  logfile = "logfile.txt"
+)
 }
 \arguments{
 \item{sep_gt}{A seperated genotype matrix from a myvcfR object.}
@@ -12,6 +18,10 @@ kNNImputation(sep_gt, k = 3, chunk_size = 1000)
 \item{k}{Number of nearest neighbours used for imputation, default: 3.}
 
 \item{chunk_size}{Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.}
+
+\item{write_log}{Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.}
+
+\item{logfile}{Name of the log file, if write_log is true.}
 }
 \value{
 A seperated genotype matrix from a myvcfR object, but with imputed missing values.

@@ -13,27 +13,27 @@
 #' @export
 
 filterBiallelicSNPs <- function(object) {
-# Extract fixed data
-fixed_data <- as.data.frame(object@fix)
+  # Extract fixed data
+  fixed_data <- as.data.frame(object@fix)
 
-# Identify biallelic SNPs:
-# - REF and ALT should be 1 base long (exclude indels)
-# - ALT should not contain "," (exclude multi-allelic variants)
-num_alleles <- sapply(strsplit(as.character(fixed_data$ALT), ","), length) + 1
-biallelic_indices <- which(nchar(as.character(fixed_data$REF)) == 1 &
-                             nchar(as.character(fixed_data$ALT)) == 1 &
-                             num_alleles == 2)
+  # Identify biallelic SNPs:
+  # - REF and ALT should be 1 base long (exclude indels)
+  # - ALT should not contain "," (exclude multi-allelic variants)
+  num_alleles <- sapply(strsplit(as.character(fixed_data$ALT), ","), length) + 1
+  biallelic_indices <- which(nchar(as.character(fixed_data$REF)) == 1 &
+                               nchar(as.character(fixed_data$ALT)) == 1 &
+                               num_alleles == 2)
 
-new_gt <- object@gt[biallelic_indices,]
-new_fix <- object@fix[biallelic_indices,]
+  new_gt <- object@gt[biallelic_indices,]
+  new_fix <- object@fix[biallelic_indices,]
 
-message(paste0(as.character(nrow(object@gt) - nrow(new_gt)), " SNPs removed because they are not biallelic."))
+  message(paste0(as.character(nrow(object@gt) - nrow(new_gt)), " SNPs removed because they are not biallelic."))
 
-# Subset VCF object to retain only biallelic SNPs
-object@gt <- object@gt[biallelic_indices,]
-object@fix <- object@fix[biallelic_indices,]
+  # Subset VCF object to retain only biallelic SNPs
+  object@gt <- object@gt[biallelic_indices,]
+  object@fix <- object@fix[biallelic_indices,]
 
-return(object)
+  return(object)
 }
 
 #' calculatePloidyAndSepGT
@@ -121,8 +121,9 @@ calculatePloidyAndSepGT <- function(object) {
 #'
 #' Seperates a vcfR object into new objects per population. Needs to be done prior to calculating allele frequencies.
 #'
-#' @param object A S4 object of class vcfR.
+#' @param object A S4 object of class vcfR or myVcfR.
 #' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
+#' @param rm_ref_alleles Logical, wether variants that only have the reference allele should be removed from the respective subpopulations object. (Default = TRUE)
 #'
 #' @return A list containing one vcfR object per population.
 #'
@@ -139,7 +140,7 @@ calculatePloidyAndSepGT <- function(object) {
 #'
 #' @export
 
-seperateByPopulations <- function(object, pop_assignments) {
+seperateByPopulations <- function(object, pop_assignments, rm_ref_alleles = TRUE) {
   # Ensure names of pop_assignments match colnames of the vcf genotypic data
   if(!all(names(pop_assignments) %in% colnames(object@gt))) {
     stop("All individual names in pop_assignments must match those in the VCF.")
@@ -152,12 +153,24 @@ seperateByPopulations <- function(object, pop_assignments) {
   vcf_by_pop <- vector("list", length = length(inds_by_pop))
   names(vcf_by_pop) <- names(inds_by_pop)
 
+  # Add the slots of myVcfR class
+  object <- new("myVcfR", object)
   # Loop through each population, extract the individuals, and store in the list
   for (pop in names(inds_by_pop)) {
     inds <- inds_by_pop[[pop]]
 
-    # Subset @gt slot
+    # Subset the different gt slots, if they are present
     gt_pop <- object@gt[, inds]
+    if (nrow(object@sep_gt) > 0) {
+      cols <- paste(rep(colnames(gt_pop), each = object@ploidy),
+                    rep(1:object@ploidy, times = ncol(gt_pop)),
+                    sep = "_")
+      sep_gt_pop <- object@sep_gt[, cols]
+    }
+    if (nrow(object@imp_gt) > 0) {
+      imp_gt_pop <- object@imp_gt[, cols]
+    }
+
     gt_vector <- as.character(as.vector(gt_pop))
     # Check if there are multiple fields in the genotype data
     if (any(grepl(":", gt_vector))) {
@@ -169,27 +182,72 @@ seperateByPopulations <- function(object, pop_assignments) {
     gt_values <- matrix(gt_vector, nrow = nrow(gt_pop), ncol = ncol(gt_pop),
                         dimnames = list(row.names(gt_pop), colnames(gt_pop)))
 
-    # Identify rows with only reference alleles for all individuals
-    non_ref_rows <- apply(gt_values, 1, function(x) !all(x %in% c("0/0", "0|0")))
-    # Filter @gt for non-reference genotypes
-    gt_pop <- gt_pop[non_ref_rows, ]
+    # If wanted, remove variants in each data set that only carry reference alleles
+    if (rm_ref_alleles) {
+      # Identify rows with only reference alleles for all individuals
+      non_ref_rows <- apply(gt_values, 1, function(x) !all(x %in% c("0/0", "0|0")))
+
+      # If the case happens that all rows have only the reference, create empty placeholder matrices and give a warning.
+      if (all(!non_ref_rows)) {
+        print("Test")
+        warning("One population has only the reference allele for all variants.")
+        names <- colnames(gt_pop)
+        gt_pop <- matrix(ncol = ncol(gt_pop), nrow = 0)
+        colnames(gt_pop) <- names
+        if (exists("sep_gt_pop")) {
+          names <- colnames(sep_gt_pop)
+          sep_gt_pop <- matrix(ncol = ncol(sep_gt_pop), nrow = 0)
+          colnames(sep_gt_pop) <- names
+        }
+        if (exists("imp_gt_pop")) {
+          names <- colnames(imp_gt_pop)
+          imp_gt_pop <- matrix(ncol = ncol(imp_gt_pop), nrow = 0)
+          colnames(imp_gt_pop) <- names
+        }
+        # Subset and filter @fix slot
+        names <- colnames(fix_pop)
+        fix_pop <- matrix(ncol = ncol(fix_pop), nrow = 0)
+        colnames(fix_pop) <- names
+      }
+      # Filter genotype matrices for only non-reference genotypes
+      gt_pop <- gt_pop[non_ref_rows, , drop = FALSE]
+      if (exists("sep_gt_pop")) {
+        sep_gt_pop <- sep_gt_pop[non_ref_rows, , drop = FALSE]
+      }
+      if (exists("imp_gt_pop")) {
+        imp_gt_pop <- imp_gt_pop[non_ref_rows, , drop = FALSE]
+      }
+      # Subset and filter @fix slot
+      fix_pop <- object@fix[non_ref_rows, , drop = FALSE]
+    } else {
+      fix_pop <- object@fix
+    }
+
     # Common @meta slot
     meta_pop <- object@meta
 
-    # Subset and filter @fix slot
-    fix_pop <- object@fix[non_ref_rows, ]
-
     # Create a new vcfR object
-    vcf_pop <- new("vcfR", gt = gt_pop, fix = fix_pop, meta = meta_pop)
+    vcf_pop <- object
+    vcf_pop@fix <- fix_pop
+    vcf_pop@meta <- meta_pop
+    vcf_pop@gt <- gt_pop
+    if (exists("sep_gt_pop")) {
+      vcf_pop@sep_gt <- sep_gt_pop
+    }
+    if (exists("imp_gt_pop")) {
+      vcf_pop@imp_gt <- imp_gt_pop
+    }
+    if (nrow(object@allele_freqs) > 0) {
+      vcf_pop@allele_freqs <- calculateAlleleFreqs(vcf_pop)@allele_freqs
+    }
+
 
     # Store the vcfR object in the list
     vcf_by_pop[[pop]] <- vcf_pop
   }
 
-
   return(vcf_by_pop)
 }
-
 
 
 #' calculateAlleleFreqs
@@ -275,9 +333,13 @@ calculateAlleleFreqs <- function(object, missing_data = "none", ...) {
 #' Calculate one of the population genomics metrics of this package on a per window basis over a longer sequence or even whole chromsomes and genomes. Calculations are done in parallel.
 #'
 #' @param object An S4 object of type myVcfR.
+#' @param metricFunction One of the population genomics metrics functions included in this package.
 #' @param window_size The size of the window for which Pi is calculated. (Default = 1000)
 #' @param step_size The size of the step in between windows. (Default = 0)
 #' @param min_var Minimum number of variants that must be present in a window to calculate the metric. Default is set to 2, because many metrics break if there is only one or none variant to work with.
+#' @param pop_assignments If the metric is calculated from two populations (f.e. Fst, private alleles, etc.) then on has to provide a named vector. Elements are the population names and names are the individual name.
+#' @param write_log Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.
+#' @param logfile Name of the log file, if write_log is true.
 #'
 #' @return A data frame with four columns, the window chromosome, the window start and end postion, the number of variants in the window, and the value of the metric.
 #'
@@ -287,9 +349,14 @@ calculateAlleleFreqs <- function(object, missing_data = "none", ...) {
 #'
 #' @export
 
-calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, step_size = 0, min_var = 2) {
+calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, step_size = 0, min_var = 2, pop_assignments = NULL, write_log = FALSE, logfile = "logfile.txt") {
+
   # Convert the function name to a string for comparison
   metricFunctionName <- deparse(substitute(metricFunction))
+
+  if (metricFunctionName %in% c("Fst", "PrivateAlleles") & is.null(pop_assignments)) {
+    stop("Please provide a named vector with population assignments of each individual in the data set for this metric.")
+  }
 
   # Extract the positions and the chromosomes
   variant_positions <- as.numeric(object@fix[, 2])  # Assuming the second column contains positions
@@ -309,11 +376,7 @@ calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, 
     num_windows <- ceiling((max(chr_positions) - min(chr_positions)) / (step_size + window_size))
 
     # Determine the number of cores
-    num_cores <- min(detectCores() - 1, num_windows)  # Reserve one core for the system
-
-    # Set up the parallel backend
-    cl <- makeCluster(num_cores)
-    registerDoParallel(cl)
+    num_cores <- 2# min(detectCores() - 1, num_windows)  # Reserve one core for the system
 
     # Prepare a list of arguments for each task
     tasks <- lapply(seq_len(num_windows), function(i) {
@@ -342,22 +405,52 @@ calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, 
         metricFunctionName = metricFunctionName,
         window_size = window_size,
         start = start_pos,
-        end = end_pos
+        end = end_pos,
+        pa = pop_assignments,
+        id = i
       )
     })
 
     # Prepare the metric function to be exported.
     args_list <- list(metricFunction = metricFunction)
+
+    # Set up the parallel backend
+    cl <- makeCluster(num_cores)
+    registerDoParallel(cl)
+
+    #Create log file and prepare progress tracking if write log is true
+    if (write_log) {
+      message(paste0("Preparing log file ", logfile))
+      # Function to safely write to a log file
+      log_progress <- function(message, log_file) {
+        # Obtain a lock on the file to avoid write conflicts
+        fileConn <- file(log_file, open = "a")
+        tryCatch({
+          # Write the progress message
+          writeLines(message, con = fileConn)
+        }, finally = {
+          # Release the file lock
+          close(fileConn)
+        })
+      }
+      file.create(logfile)
+    }
+
     # Perform the calculations in parallel
     window_results <- foreach(task = tasks, .packages = c("GenoPop")) %dopar% {
       if (!task$calculate) {
-        return(list(chromosome = chr, window_start = start, window_end = end, num_variants = length(task$window_indices), metric = NA))  # No data for this window
+        if (task$metricFunctionName %in% c("PrivateAlleles")) {
+          return(list(chromosome = chr, window_start = start, window_end = end, num_variants = length(task$window_indices), metric1 = NA, metric2 = NA))
+        } else {
+          return(list(chromosome = chr, window_start = start, window_end = end, num_variants = length(task$window_indices), metric = NA))
+        }
       } else {
         # Create a 'window' object that contains only the data for this specific window
-        window_object <- task$object  # This will be a deep copy of the object
+        window_object <- task$object
         # Now, adjust the data in window_object to reflect only the current window
         window_object@fix <- task$object@fix[task$chr_indices[task$window_indices], ]
         window_object@allele_freqs <- task$object@allele_freqs[task$chr_indices[task$window_indices], ]
+        window_object@gt <- task$object@gt[task$chr_indices[task$window_indices], ]
         window_object@sep_gt <- task$object@sep_gt[task$chr_indices[task$window_indices], ]
         if (task$imp){
           window_object@imp_gt <- task$object@imp_gt[task$chr_indices[task$window_indices], ]
@@ -368,18 +461,27 @@ calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, 
         # Calculate the metric
         if (task$metricFunctionName %in% c("Pi", "TajimasD")) {
           metric_value <- current_metricFunction(window_object, task$window_size)  # Also hand over the window size as sequence length
+        } else if (task$metricFunctionName %in% c("Fst", "PrivateAlleles")) {
+          metric_value <- current_metricFunction(window_object, task$pa)
         } else {
           metric_value <- current_metricFunction(window_object)
         }
 
-        return(list(chromosome = chr, window_start = start, window_end = end, num_variants = length(task$window_indices), metric = metric_value))
+        if (write_log) {
+          log_progress(paste0(Sys.time(), " Completed task ", task$id, " of ", num_windows, "."), logfile)
+        }
 
+        if (task$metricFunctionName %in% c("PrivateAlleles")) {
+          return(list(chromosome = chr, window_start = start, window_end = end, num_variants = length(task$window_indices), metric1 = metric_value[1], metric2 = metric_value[2]))
+        } else {
+          return(list(chromosome = chr, window_start = start, window_end = end, num_variants = length(task$window_indices), metric = metric_value))
+        }
       }
     }
 
     # Stop the cluster
     stopCluster(cl)
-
+    #print(lapply(window_results, length))
     # Convert the list of lists into a data frame
     window_results_df <- do.call(rbind, lapply(window_results, as.data.frame))
     # Each chromosome's results are added to the main 'results' list
@@ -389,139 +491,10 @@ calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, 
   # Combine all results into a single data frame. This assumes all data frames have the same column structure.
   consolidated_results <- do.call(rbind, results)
   rownames(consolidated_results) <- 1:nrow(consolidated_results)
-  colnames(consolidated_results) <- c("chromosome", "window_start", "window_end", "num_variants", metricFunctionName)
-  return(consolidated_results)
-}
-
-#' calculateTwoPopWindowedMetric
-#'
-#' Calculates on the two populations metrics in this package for windows over a longer sequence or even whole chromosomes and genomes. Calculations are done in parallel.
-#'
-#' @param objects An S4 object of type myVcfR.
-#' @param window_size The size of the window for which Pi is calculated. (Default = 1000)
-#' @param step_size The size of the step in between windows. (Default = 0)
-#' @param min_var Minimum number of variants that must be present in a window to calculate the metric. Default is set to 2, because many metrics break if there is only one or none variant to work with.
-#'
-#' @return A data frame with four columns, the window chromosome, the window start and end postion, the number of variants in the window, and the value of the metric.
-#'
-#' @examples
-#' data("mys", package = "GenoPop")
-#' data("dav", package = "GenoPop")
-#' calculateTwoPopWindowedMetric(list(mys, dav), PrivateAlleles, window_size = 10000)
-#'
-#' @export
-
-calculateTwoPopWindowedMetric <- function(objects, metricFunction, window_size = 1000, step_size = 0, min_var = 2) {
-  # Convert the function name to a string for comparison
-  metricFunctionName <- deparse(substitute(metricFunction))
-
-  # Extract the positions and the chromosomes from the first object as a reference
-  variant_positions <- as.numeric(objects[[1]]@fix[, 2])  # Assuming the second column contains positions
-  chromosomes <- objects[[1]]@fix[, 1]  # Assuming the first column contains chromosome names
-
-  # Prepare a list to hold results
-  results <- list()
-
-  # We will calculate the metric for each chromosome separately
-  unique_chromosomes <- unique(chromosomes)
-  for (chr in unique_chromosomes) {
-    # Get indices of the variants on this chromosome from each object
-    chr_indices_list <- lapply(objects, function(object) which(object@fix[, 1] == chr))
-    chr_positions_list <- lapply(objects, function(object) as.numeric(object@fix[, 2]))
-
-    # Calculate the number of windows based on the step size and the positions of the variants
-    # This assumes that the chromosome structure is consistent across populations
-    num_windows <- ceiling((max(unlist(chr_positions_list)) - min(unlist(chr_positions_list))) / (step_size + window_size))
-
-    # Determine the number of cores
-    num_cores <- min(detectCores() - 1, num_windows)  # Reserve one core for the system
-
-    # Set up the parallel backend
-    cl <- makeCluster(num_cores)
-    registerDoParallel(cl)
-
-    # Prepare a list of arguments for each task
-    tasks <- lapply(seq_len(num_windows), function(i) {
-      start_pos <- (i - 1) * (window_size + step_size)
-      end_pos <- start_pos + window_size
-      calculate <- TRUE
-      # Create a list to store whether we should calculate for each window, and the corresponding indices
-      window_tasks <- list()
-      for (index in seq_along(objects)) {
-        # Get indices of variants within this window for each object
-        window_indices <- which(chr_positions_list[[index]] >= start_pos & chr_positions_list[[index]] <= end_pos)
-        # Check if there are enough variants to proceed with the calculations
-        if (length(window_indices) < min_var) {
-          calculate <- FALSE
-        }
-
-
-        window_tasks[[index]] <- list( window_indices = window_indices)
-      }
-      list(
-        calculate = calculate,
-        start = start_pos,
-        end = end_pos,
-        window_tasks = window_tasks,
-        objects = objects,
-        chr_indices_list = chr_indices_list,
-        metricFunction = metricFunction
-      )
-    })
-
-    # Perform the calculations in parallel
-    window_results <- foreach(task = tasks, .packages = c("GenoPop")) %dopar% {
-      if (!task$calculate) {
-        if (identical(metricFunction, PrivateAlleles)){
-          return(list(chromosome = chr, window_start = task$start, window_end = task$end, metric1 = NA, metric2 = NA))  # No data for this window
-        } else {
-          return(list(chromosome = chr, window_start = task$start, window_end = task$end, metric = NA))  # No data for this window
-        }
-      } else {
-        # Create a 'window_objects' list that contains only the data for this specific window for each population
-        window_objects <- lapply(seq_along(task$objects), function(index) {
-
-          window_object <- task$objects[[index]]  # This will be a deep copy of the object
-
-          # Adjust the data in window_object to reflect only the current window
-          current_chr_indices <- task$chr_indices_list[[index]]
-          current_window_indices <- task$window_tasks[[index]]$window_indices
-
-          window_object@fix <- window_object@fix[current_chr_indices[current_window_indices], ]
-          window_object@allele_freqs <- window_object@allele_freqs[current_chr_indices[current_window_indices], ]
-          window_object@sep_gt <- window_object@sep_gt[current_chr_indices[current_window_indices], ]
-          window_object@imp_gt <- window_object@imp_gt[current_chr_indices[current_window_indices], ]  # if available
-
-          return(window_object)
-        })
-
-        # Calculate the metric
-        metric_value <- metricFunction(window_objects)
-        if (length(metric_value) == 1) {
-          return(list(chromosome = chr, window_start = task$start, window_end = task$end, metric = metric_value))
-        } else {
-          return(list(chromosome = chr, window_start = task$start, window_end = task$end, metric1 = metric_value[1], metric2 = metric_value[2]))
-        }
-      }
-    }
-    # Stop the cluster
-    stopCluster(cl)
-
-    # Convert the list of lists into a data frame
-    window_results_df <- do.call(rbind, lapply(window_results, as.data.frame))
-    # Each chromosome's results are added to the main 'results' list
-    results[[chr]] <- window_results_df
-  }
-
-  # Combine all results into a single data frame. This assumes all data frames have the same column structure.
-  consolidated_results <- do.call(rbind, results)
-  rownames(consolidated_results) <- 1:nrow(consolidated_results)
-  if (identical(metricFunction, PrivateAlleles)){
-    colnames(consolidated_results) <- c("chromosome", "window_start", "window_end", paste0(metricFunctionName, "_pop1"), paste0(metricFunctionName, "_pop2"))
+  if (metricFunctionName %in% c("PrivateAlleles")) {
+    colnames(consolidated_results) <- c("chromosome", "window_start", "window_end", "num_variants", paste0(metricFunctionName,"_pop1"), paste0(metricFunctionName,"_pop2"))
   } else {
-    colnames(consolidated_results) <- c("chromosome", "window_start", "window_end", metricFunctionName)
+    colnames(consolidated_results) <- c("chromosome", "window_start", "window_end", "num_variants", metricFunctionName)
   }
   return(consolidated_results)
 }
-
-

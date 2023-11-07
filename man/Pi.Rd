@@ -9,18 +9,16 @@ Pi(object, seq_length)
 \arguments{
 \item{object}{An S4 object of type myVcfR.}
 
-\item{window_size}{The size of the window for which Pi is calculated. (Default = 1000)}
-
-\item{step_size}{The size of the step in between windows. (Default = 0)}
+\item{seq_length}{Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.}
 }
 \value{
 The nucleotide diversity (pi) per window in data frame.
 }
 \description{
-Calculate the average number of nucleotide differences per site between two sequences, for windows of specified length. The algorithm used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
+Calculate the average number of nucleotide differences per site between two sequences. The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
 }
 \examples{
 data("mys", package = "GenoPop")
-Pi(mys)
+Pi(mys, 265392)
 
 }
