@@ -22,6 +22,11 @@ To install the GenoPop package directly from GitHub, you will need the `devtools
 ```R
 install.packages("devtools")
 ```
+On clusters like curta or mfn it is easiest to create a new conda environment and then install devtools via conda with this command: 
+
+```
+conda install -c conda-forge r-devtools
+``
 
 Once devtools is installed, you can install GenoPop using the install_github function. Run the following commands in your R console:
 
