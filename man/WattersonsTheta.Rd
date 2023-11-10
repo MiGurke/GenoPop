@@ -7,7 +7,7 @@
 WattersonsTheta(object, seq_length)
 }
 \arguments{
-\item{object}{A S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.}
+\item{object}{A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.}
 
 \item{seq_length}{The length of the sequence in the data set.}
 }
@@ -15,7 +15,7 @@ WattersonsTheta(object, seq_length)
 Watterson's theta value.
 }
 \description{
-Calculate Watterson's thea, a measure for neutrality, from an myVcfR object. The metric will be normalized by the sequence length to make it comparable between data sets.
+Calculate Watterson's thea, a measure for neutrality, from an GPvcfR object. The metric will be normalized by the sequence length to make it comparable between data sets.
 }
 \examples{
 data("mys", package = "GenoPop")

@@ -7,13 +7,13 @@
 PolymorphicSites(object)
 }
 \arguments{
-\item{object}{An S4 object of type myVcfR. Allele frequencies must be present.}
+\item{object}{An S4 object of type GPvcfR. Allele frequencies must be present.}
 }
 \value{
 The number of polymorphic sites.
 }
 \description{
-Count the number of polymorphic sites in the data set.
+Count the number of polymorphic sites in the data set (aka. sites not fixed for the alternative allele).
 }
 \examples{
 data("real", package = "GenoPop")

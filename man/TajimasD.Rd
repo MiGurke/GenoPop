@@ -7,7 +7,7 @@
 TajimasD(object, seq_length)
 }
 \arguments{
-\item{object}{A S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.}
+\item{object}{A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.}
 
 \item{seq_length}{Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.}
 }

@@ -4,10 +4,12 @@
 \alias{TwoDimSFS}
 \title{TwoDimSFS}
 \usage{
-TwoDimSFS(objects, folded = FALSE)
+TwoDimSFS(object, pop_assignments, folded = FALSE)
 }
 \arguments{
-\item{objects}{A list of two S4 objects of type myVcfR. Allele frequencies and genotype matrices must be present.}
+\item{object}{A GPvcfR object.}
+
+\item{pop_assignments}{A named vector. Elements are the population names and names are the individual name.}
 
 \item{folded}{Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned. (Default is unfolded (FALSE).)}
 }
@@ -15,11 +17,18 @@ TwoDimSFS(objects, folded = FALSE)
 Two-dimensional site frequency spectrum as a matrix
 }
 \description{
-Calculate a two-dimensional site frequency spectrum from a list of two myVcfR objects.
+Calculate a two-dimensional site frequency spectrum from a list of two GPvcfR objects.
 }
 \examples{
+mys1 <- c("8449", "8128", "8779")
+mys2 <- c("8816", "8823", "8157")
+
+individuals <- c(mys1, mys2)
+pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
+pop_assignments <- setNames(pop_names, individuals)
+
 data("mys", package = "GenoPop")
-data("dav", package = "GenoPop")
-TwoDimSFS(list(mys, dav), folded = TRUE)
+
+TwoDimSFS(mys, pop_assignments, folded = TRUE)
 
 }

@@ -19,9 +19,9 @@ NULL
 
 #' The test data set called 'mys'
 #'
-#' @description This is the real data set, but seperated by population (mys & dav) with missing data imputed (rf) and allele frequencies calculated.
+#' @description This is the real data set, but separated by population (mys & dav) with missing data imputed (rf) and allele frequencies calculated.
 #'
-#' @format A myVcfR object
+#' @format A GPvcfR object
 #'
 #' @examples
 #' \dontrun{
@@ -38,9 +38,9 @@ NULL
 
 #' The test data set called 'dav'
 #'
-#' @description This is the real data set, but seperated by population (mys & dav) with missing data imputed (rf) and allele frequencies calculated.
+#' @description This is the real data set, but separated by population (mys & dav) with missing data imputed (rf) and allele frequencies calculated.
 #'
-#' @format A myVcfR object
+#' @format A GPvcfR object
 #'
 #' @examples
 #' \dontrun{

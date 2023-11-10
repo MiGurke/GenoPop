@@ -7,7 +7,7 @@
 OneDimSFS(object, folded = FALSE)
 }
 \arguments{
-\item{object}{A S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.}
+\item{object}{A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.}
 
 \item{folded}{Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned. For the unfolded it is assumed that the genotype "0" represents the ancestral state in the data. (Default is unfolded (FALSE).)}
 }
@@ -15,7 +15,7 @@ OneDimSFS(object, folded = FALSE)
 Site frequency spectrum as a named vector
 }
 \description{
-Calculate a one dimensional site frequency spectrum from an myVcfR object.
+Calculate a one dimensional site frequency spectrum from an GPvcfR object.
 }
 \examples{
 data("mys", package = "GenoPop")

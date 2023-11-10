@@ -8,7 +8,7 @@ test_that("calculateWindowedMetric works", {
 
   load(testthat::test_path("testdata", "mys.RData"))
 
-  res1 <- calculateWindowedMetric(mys, FixedSites, window_size = 1000, pop_assignments = pop_assignments)
+  res1 <- calculateWindowedMetric(mys, FixedSites, window_size = 1000, pop_assignments = pop_assignments, threads = 1)
   expect_is(res1, "data.frame")
   expect_true(nrow(res1) == 266)
   expect_true(ncol(res1) == 5)

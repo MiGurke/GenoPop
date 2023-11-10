@@ -1,0 +1,95 @@
+\HeaderA{GenoPop}{GenoPop}{GenoPop}
+\aliasA{\_PACKAGE}{GenoPop}{.Rul.PACKAGE}
+%
+\begin{Description}\relax
+A R package to perform several population genomics analyses directly on whole genome vcf files.
+\end{Description}
+%
+\begin{Details}\relax
+Most important features are:
+\begin{itemize}
+
+\item{} Reading genotype data ready to use from vcf files using the vcfR package.
+\item{} Different methods to impute or remove missing data from the genotype matrix.
+\item{} Calculation of several commonly used population genomics metrics from the genotype data.
+\item{} Window based analyses with those different metrics.
+\item{} Parallelization and optimization of heavy tasks to enable processing of whole genomes (imputation and window based analyses).
+\item{} Writing processed data back to file in vcf format.
+
+\end{itemize}
+
+%
+\begin{SubSection}{Installation Instructions for GenoPop}
+%
+\begin{SubSubSection}{Prerequisites}
+
+Before installing GenoPop, make sure you have R installed on your system. You can download and install R from \Rhref{https://cran.r-project.org/}{CRAN}.
+\end{SubSubSection}
+
+
+%
+\begin{SubSubSection}{Installing GenoPop from GitHub}
+
+To install the GenoPop package directly from GitHub, you will need the \code{devtools} package in R. If you don't have \code{devtools} installed, you can install it by running the following command in R:
+
+\begin{alltt}install.packages("devtools")
+\end{alltt}
+
+
+Once devtools is installed, you can install GenoPop using the install\_github function. Run the following commands in your R console:
+
+\begin{alltt}library(devtools)
+install_github("MiGurke/GenoPop")
+\end{alltt}
+
+
+Then load the package..
+
+\begin{alltt}library(GenoPop)
+\end{alltt}
+
+
+and your ready to go!
+\end{SubSubSection}
+
+
+%
+\begin{SubSubSection}{Dependencies}
+
+For proper compression of vcf's newly generated, you need to have tabix installed on your machine. All other dependencies are supposed the handled by R itself.
+\end{SubSubSection}
+
+
+\end{SubSection}
+
+
+%
+\begin{SubSection}{Getting started}
+
+To get your vcf formated data into R use the reading function of the vcfR package:
+
+\begin{alltt}vcf <- read.vcfR( "example.vcf", verbose = FALSE )
+\end{alltt}
+
+
+It can read compressed and umcompressed vcf files.
+
+From there a good point to start your analysis is to use the calculateAlleleFreqs function to just populate the most important data and information slots from you vcf file automatically.
+
+\begin{alltt}example <- calculateAlleleFreqs(vcf)
+\end{alltt}
+
+
+This will give you a nicely formatted genotype matrix (example@sep\_gt), calculated allele frequencies (example@allele\_freqs) and some interesting stats about the amount of missing data in you data set (example@missing\_data).
+
+From there it depends on you how to continue. You can fix some issue with missing data by imputing or removing it, directly calculate some stats like Fst, Pi, and the site frequency spectrum, or even do a window based analysis. Just have a look at the available functions in the man pages.
+
+If you need further assistance or got suggestions for this package, feel free to open an issue on the GenoPop GitHub repo or contact me in any other way.
+\end{SubSection}
+
+\end{Details}
+%
+\begin{Author}\relax
+\strong{Maintainer}: Marie (Mick) Gurke \email{margurke@gmail.com} (\Rhref{https://orcid.org/0000-0001-9901-424X}{ORCID})
+
+\end{Author}

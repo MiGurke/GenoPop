@@ -9,12 +9,13 @@ rfImputation(
   maxiter = 10,
   ntree = 100,
   chunk_size = 1000,
+  threads = NULL,
   write_log = FALSE,
   logfile = "logfile.txt"
 )
 }
 \arguments{
-\item{sep_gt}{A seperated genotype matrix from a myvcfR object.}
+\item{sep_gt}{A separated genotype matrix from a myvcfR object.}
 
 \item{maxiter}{The number of improvement iterations the random forest algorithm (missForest) runs.}
 
@@ -22,15 +23,17 @@ rfImputation(
 
 \item{chunk_size}{Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.}
 
+\item{threads}{Number of threads used for the computation. Default is one less then available on the system.}
+
 \item{write_log}{Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.}
 
 \item{logfile}{Name of the log file, if write_log is true.}
 }
 \value{
-A seperated genotype matrix from a myvcfR object, but with imputed missing values.
+A separated genotype matrix from a myvcfR object, but with imputed missing values.
 }
 \description{
-rfImputation
+Missing data imputation using the random forest algorithm implemented in missForest R package. Computation is parallelized. Imputation is done in chunks of SNP's though the genome. The size of the chunks needs to be chosen carefully, as larger chunks may give more accuracy to an extend (assuming that region very far apart in the genome are likely not neighbors any way, because they should be more different from closer regions), but will increase computation demand drastically. \emph{I will carry out some more formal tests on this algortihm soon and will include more information about this here soon.} If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
 }
 \examples{
 example_matrix <- matrix(c("0", "1", ".", "1", "1", ".", "0", "0", ".", "1", "1", ".", "0", "0", "0", "0", ".", "1", "0", "0", ".", "1", "1", ".", "0"), nrow = 5, byrow = TRUE)

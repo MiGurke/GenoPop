@@ -1,7 +1,7 @@
 test_that("calculateAlleleFreqs works", {
   load(testthat::test_path("testdata", "real.RData"))
   none <- calculateAlleleFreqs(vcf, missing_data = "none")
-  expect_s4_class(none, "myVcfR")
+  expect_s4_class(none, "GPvcfR")
   # Check for the presence of each slot
   expect_true(!is.null(slot(none, "ploidy")))
   expect_true(!is.null(slot(none, "imp_gt")))

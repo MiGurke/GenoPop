@@ -7,7 +7,7 @@
 Fst(object, pop_assignments, weighted = FALSE)
 }
 \arguments{
-\item{object}{A myVcfR object.}
+\item{object}{A GPvcfR object.}
 
 \item{pop_assignments}{A named vector. Elements are the population names and names are the individual name.}
 
@@ -17,7 +17,7 @@ Fst(object, pop_assignments, weighted = FALSE)
 Fst value.
 }
 \description{
-Calculate the mean or weighted (by number of non missing chromsomes) fixiation index (Fst) from two populations in a list of myVcfR objects using the method of Weir and Cockerham (1984).
+Calculate the mean or weighted (by number of non missing chromsomes) fixiation index (Fst) from two populations in a list of GPvcfR objects using the method of Weir and Cockerham (1984).
 }
 \examples{
 mys1 <- c("8449", "8128", "8779")

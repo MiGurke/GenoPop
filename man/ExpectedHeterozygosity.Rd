@@ -7,7 +7,7 @@
 ExpectedHeterozygosity(object)
 }
 \arguments{
-\item{object}{An S4 object of type myVcfR. Allele frequencies must be present.}
+\item{object}{An S4 object of type GPvcfR. Allele frequencies must be present.}
 }
 \value{
 Expected heterozygosity.

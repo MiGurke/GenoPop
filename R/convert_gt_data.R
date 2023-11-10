@@ -1,6 +1,6 @@
 #' filterBiallelicSNPs
 #'
-#' Filter for only biallelic SNPs in the data set.
+#' Filter for only biallelic SNPs in the data set. This function is used mainly internally and automatically when using \code{\link{calculateAlleleFreqs}}.
 #'
 #' @param object A S4 object of class vcfR.
 #'
@@ -38,7 +38,7 @@ filterBiallelicSNPs <- function(object) {
 
 #' calculatePloidyAndSepGT
 #'
-#' Calculate ploidy levels and separate the genotypes into a matrix according to the ploidy.
+#' Calculate ploidy levels and separate the genotypes into a matrix according to the ploidy. This function is mainly used internally. If you want to these oprations, its easier to start here :  \code{\link{calculateAlleleFreqs}}
 #'
 #' @param object A S4 object of class vcfR.
 #'
@@ -109,7 +109,7 @@ calculatePloidyAndSepGT <- function(object) {
   }
 
   # Create an object of the new class and populate the new slots
-  new_object <- new("myVcfR", object)
+  new_object <- new("GPvcfR", object)
   new_object@ploidy <- ploidy
   new_object@sep_gt <- separated_gt_data
 
@@ -117,11 +117,11 @@ calculatePloidyAndSepGT <- function(object) {
 }
 
 
-#' seperateByPopulations
+#' separateByPopulations
 #'
-#' Seperates a vcfR object into new objects per population. Needs to be done prior to calculating allele frequencies.
+#' separates a vcfR object into new objects per population. Needs to be done prior to calculating allele frequencies.
 #'
-#' @param object A S4 object of class vcfR or myVcfR.
+#' @param object A S4 object of class vcfR or GPvcfR.
 #' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
 #' @param rm_ref_alleles Logical, wether variants that only have the reference allele should be removed from the respective subpopulations object. (Default = TRUE)
 #'
@@ -136,11 +136,11 @@ calculatePloidyAndSepGT <- function(object) {
 #' pop_assignments <- setNames(pop_names, individuals)
 #'
 #' data("real", package = "GenoPop")
-#' vcfs <- seperateByPopulations(real, pop_assignments)
+#' vcfs <- separateByPopulations(real, pop_assignments)
 #'
 #' @export
 
-seperateByPopulations <- function(object, pop_assignments, rm_ref_alleles = TRUE) {
+separateByPopulations <- function(object, pop_assignments, rm_ref_alleles = TRUE) {
   # Ensure names of pop_assignments match colnames of the vcf genotypic data
   if(!all(names(pop_assignments) %in% colnames(object@gt))) {
     stop("All individual names in pop_assignments must match those in the VCF.")
@@ -153,8 +153,8 @@ seperateByPopulations <- function(object, pop_assignments, rm_ref_alleles = TRUE
   vcf_by_pop <- vector("list", length = length(inds_by_pop))
   names(vcf_by_pop) <- names(inds_by_pop)
 
-  # Add the slots of myVcfR class
-  object <- new("myVcfR", object)
+  # Add the slots of GPvcfR class
+  object <- new("GPvcfR", object)
   # Loop through each population, extract the individuals, and store in the list
   for (pop in names(inds_by_pop)) {
     inds <- inds_by_pop[[pop]]
@@ -252,14 +252,17 @@ seperateByPopulations <- function(object, pop_assignments, rm_ref_alleles = TRUE
 
 #' calculateAlleleFreqs
 #'
-#' Calculate allele frequencies from a vcfR object. Will also add the slots ploidy and sep_gt, if not already present.
+#' Calculate allele frequencies from a vcfR object. Will also add the slots ploidy, sep_gt, and missing_data, if not already present.
 #'
 #' @param object A S4 object of class vcfR.
-#' @param missing_data Method to deal with missing data. Options are "remove", "impute", "none". Default is "none". In case of "remove", function needs the additional parameter threshold, which is the fraction of missing data in a variant that is still acceptable. In case of "impute" the function needs the additional parameters "method", with which the imputation method can be chosen. See \code{\link{imputeMissingData}}
+#' @param missing_data Method to deal with missing data. Options are "remove", "impute", "none". Default is "none". In case of "remove", function needs the additional parameter threshold, which is the fraction of missing data in a variant that is still acceptable. In case of "impute" the function needs the additional parameters "method", with which the imputation method can be chosen.
 #' @param ... Additional parameters for how to deal with missing data. For imputation see \code{\link{imputeMissingData}} and for removal see \code{\link{rmMissingData}}.
 #'
 #' @return A S4 object of the same class but with following slots added:
 #' * allele_freqs (data frame)
+#' * sep_gt (matrix)
+#' * if missing data imputation was done: imp_gt (matrix)
+#' * missing_data (list)
 #'
 #'
 #' @examples
@@ -274,7 +277,7 @@ seperateByPopulations <- function(object, pop_assignments, rm_ref_alleles = TRUE
 calculateAlleleFreqs <- function(object, missing_data = "none", ...) {
 
   # Check if needed slots are available, if not create them
-  if (!inherits(object, "myVcfR") | !("ploidy" %in% slotNames(object)) | !("sep_gt" %in% slotNames(object))) {
+  if (!inherits(object, "GPvcfR") | !("ploidy" %in% slotNames(object)) | !("sep_gt" %in% slotNames(object))) {
     message("Calculating ploidy and separating genotype data...")
     object <- calculatePloidyAndSepGT(object)
   }
@@ -298,9 +301,15 @@ calculateAlleleFreqs <- function(object, missing_data = "none", ...) {
       message("No valid imputation method provided for missing_data='impute'. Will use method='mean' per default.")
       impute_args$method = "mean"
     }
+    if (!"write_log" %in% names(impute_args)) {
+      impute_args$write_log = "FALSE"
+    }
+    if (!"logfile" %in% names(impute_args)) {
+      impute_args$logfile = "imputation_log.txt"
+    }
     # This is to calculate stats about the missing data without removing them.
     object <- rmMissingData(object, 1)
-    object <- imputeMissingData(object, impute_args$method)
+    object <- imputeMissingData(object, impute_args$method, write_log =  impute_args$write_log, logfile =  impute_args$logfile)
     separated_gt_data <- object@imp_gt
   } else if (missing_data == "none") {
     # This is to calculate stats about the missing data without removing them.
@@ -332,16 +341,17 @@ calculateAlleleFreqs <- function(object, missing_data = "none", ...) {
 #'
 #' Calculate one of the population genomics metrics of this package on a per window basis over a longer sequence or even whole chromsomes and genomes. Calculations are done in parallel.
 #'
-#' @param object An S4 object of type myVcfR.
+#' @param object An S4 object of type GPvcfR.
 #' @param metricFunction One of the population genomics metrics functions included in this package.
 #' @param window_size The size of the window for which Pi is calculated. (Default = 1000)
 #' @param step_size The size of the step in between windows. (Default = 0)
+#' @param threads Number of threads used for the computation. Default is one less then available on the system.
 #' @param min_var Minimum number of variants that must be present in a window to calculate the metric. Default is set to 2, because many metrics break if there is only one or none variant to work with.
 #' @param pop_assignments If the metric is calculated from two populations (f.e. Fst, private alleles, etc.) then on has to provide a named vector. Elements are the population names and names are the individual name.
-#' @param write_log Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.
+#' @param write_log Logical, whether a log file of the process should be written to disk. This is adviced for analysing large data sets.
 #' @param logfile Name of the log file, if write_log is true.
 #'
-#' @return A data frame with four columns, the window chromosome, the window start and end postion, the number of variants in the window, and the value of the metric.
+#' @return A data frame with one column for the window chromosome, the window start and end position, the number of variants in the window, and the value(s) of the metric.
 #'
 #' @examples
 #' data("mys", package = "GenoPop")
@@ -349,7 +359,7 @@ calculateAlleleFreqs <- function(object, missing_data = "none", ...) {
 #'
 #' @export
 
-calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, step_size = 0, min_var = 2, pop_assignments = NULL, write_log = FALSE, logfile = "logfile.txt") {
+calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, step_size = 0, threads = NULL, min_var = 2, pop_assignments = NULL, write_log = FALSE, logfile = "logfile.txt") {
 
   # Convert the function name to a string for comparison
   metricFunctionName <- deparse(substitute(metricFunction))
@@ -376,7 +386,11 @@ calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, 
     num_windows <- ceiling((max(chr_positions) - min(chr_positions)) / (step_size + window_size))
 
     # Determine the number of cores
-    num_cores <- 2# min(detectCores() - 1, num_windows)  # Reserve one core for the system
+    if (is.null(threads)){
+      num_cores <- min(detectCores() - 1, num_windows) # Reserve one core for the system
+    } else {
+      num_cores <- min(threads, num_windows)
+    }
 
     # Prepare a list of arguments for each task
     tasks <- lapply(seq_len(num_windows), function(i) {
@@ -463,7 +477,9 @@ calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, 
           metric_value <- current_metricFunction(window_object, task$window_size)  # Also hand over the window size as sequence length
         } else if (task$metricFunctionName %in% c("Fst", "PrivateAlleles")) {
           metric_value <- current_metricFunction(window_object, task$pa)
-        } else {
+        } else if (task$metricFunctionName %in% c("Dxy")) {
+          metric_value <- current_metricFunction(window_object, task$pa, task$window_size)
+        }else {
           metric_value <- current_metricFunction(window_object)
         }
 
@@ -498,3 +514,85 @@ calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, 
   }
   return(consolidated_results)
 }
+
+
+#' writeVCF
+#'
+#' Writes a new VCF file to disk using the imputed or separated genotypes from a GPvcfR object.
+#'
+#' @param object A GPvcfR object containing the VCF data.
+#' @param file_path Path to the output VCF file.
+#' @param use_imputed Logical, indicating whether to use the imputed genotypes if available. If FALSE or imputed genotypes are not available, separated genotypes will be used.
+#' @param bgzip Logical, indicating whether to bgzip the output file (requires tabix to be installed).
+#'
+#' @return Invisible NULL. The function is called for its side effect of writing a file.
+#'
+#' @examples
+#' data("mys", package = "GenoPop")
+#' writeVcf(mys, "output.vcf", use_imputed = TRUE)
+#'
+#' @export
+
+writeVCF <- function(object, file_path, use_imputed = TRUE, bgzip = FALSE) {
+  # Check for necessary components in the object
+  if (!all(c("sep_gt", "meta", "fix", "ploidy") %in% slotNames(object))) {
+    stop("The object does not have the necessary components.")
+  }
+
+  # Decide which genotype matrix to use
+  genotype_matrix <- if (use_imputed && !is.null(object@imp_gt) && nrow(object@imp_gt) != 0) {
+    object@imp_gt
+  } else {
+    object@sep_gt
+  }
+
+  # Determine the file connection based on bgzip parameter
+  if (bgzip) {
+    # Check if bgzip is available
+    if (system("which bgzip", ignore.stdout = TRUE, ignore.stderr = TRUE) != 0) {
+      stop("bgzip not available. Please install tabix or set bgzip=FALSE.")
+    }
+  }
+
+  # Open a connection to the file
+  file_conn <- file(file_path, "w")
+
+  # Write the header information from object meta data
+  header_lines <- object@meta
+  writeLines(header_lines, file_conn)
+
+  # Write the column names (VCF format requires these specific column names)
+  # Assuming the fix matrix has the individual names in the columns after the fixed information
+  column_names <- c("#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", colnames(object@gt))
+  writeLines(paste(column_names, collapse = "\t"), file_conn)
+
+  # Write the data rows
+  for (i in seq_len(nrow(genotype_matrix))) {
+    # Extract the fixed info for the row
+    fixed_info <- paste(object@fix[i, ], collapse = "\t")
+    # Combine genotypes into the VCF genotype format
+    genotypes <- apply(matrix(genotype_matrix[i, ], ncol = object@ploidy, byrow = TRUE), 1, function(g) {
+      paste(g, collapse = "|")
+    })
+
+    # Construct a line of VCF data
+    vcf_line <- paste(fixed_info, "GT",
+                      paste(genotypes, collapse = "\t"),
+                      sep = "\t")
+
+    # Write the line to the file
+    writeLines(vcf_line, file_conn)
+  }
+
+  # Close the file connection
+  close(file_conn)
+
+  # Compress and index the file with tabix if bgzip is TRUE
+  if (bgzip) {
+    system(paste("bgzip", file_path))
+    system(paste0("tabix ", file_path, ".gz"))
+  }
+
+  invisible(NULL)
+}
+

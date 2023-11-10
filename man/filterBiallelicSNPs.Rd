@@ -13,7 +13,7 @@ filterBiallelicSNPs(object)
 A S4 object of the same class, but complex and multiallelic variantes are removed from the @fix and @gt slots.
 }
 \description{
-Filter for only biallelic SNPs in the data set.
+Filter for only biallelic SNPs in the data set. This function is used mainly internally and automatically when using \code{\link{calculateAlleleFreqs}}.
 }
 \examples{
 data("real", package = "GenoPop")

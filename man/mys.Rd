@@ -5,13 +5,13 @@
 \alias{mys}
 \title{The test data set called 'mys'}
 \format{
-A myVcfR object
+A GPvcfR object
 }
 \usage{
 data("mys", package = "GenoPop")
 }
 \description{
-This is the real data set, but seperated by population (mys & dav) with missing data imputed (rf) and allele frequencies calculated.
+This is the real data set, but separated by population (mys & dav) with missing data imputed (rf) and allele frequencies calculated.
 }
 \examples{
 \dontrun{

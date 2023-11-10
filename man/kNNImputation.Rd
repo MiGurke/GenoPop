@@ -8,26 +8,29 @@ kNNImputation(
   sep_gt,
   k = 3,
   chunk_size = 1000,
+  threads = NULL,
   write_log = FALSE,
   logfile = "logfile.txt"
 )
 }
 \arguments{
-\item{sep_gt}{A seperated genotype matrix from a myvcfR object.}
+\item{sep_gt}{A separated genotype matrix from a GPvcfR object.}
 
 \item{k}{Number of nearest neighbours used for imputation, default: 3.}
 
 \item{chunk_size}{Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.}
+
+\item{threads}{Number of threads used for the computation. Default is one less then available on the system.}
 
 \item{write_log}{Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.}
 
 \item{logfile}{Name of the log file, if write_log is true.}
 }
 \value{
-A seperated genotype matrix from a myvcfR object, but with imputed missing values.
+A separated genotype matrix from a GPvcfR object, but with imputed missing values.
 }
 \description{
-kNNImputation
+Function to execute the paralellized imputation of missing data using a k-nearest-neighbor algorithm. Imputation is done in chunks of SNP's though the genome. The size of the chunks needs to be chosen carefully, as larger chunks may give more accuracy to an extend (assuming that region very far apart in the genome are likely not neighbors any way, because they should be more different from closer regions), but will increase computation demand drastically. This implementation of the algorithm uses the annoy library (https://github.com/spotify/annoy) to detect the neighbors more efficiently. Neighboring SNP's with no data for the individual to be imputed, will be exculded. This can lead to some positions left missing, if there are individuals with large proportions of missing data. The number of neighbours k, also needs to be chosen wisely. Larger k's might give more accuracy but will also increase the computational needs, although not as drastically as for the chunk size. \emph{I will carry out some more formal tests on this algortihm soon and will include more information about this here soon.} If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
 }
 \examples{
 example_matrix <- matrix(c("0", "1", ".", "1", "1", ".", "0", "0", ".", "1", "1", ".", "0", "0", "0", "0", ".", "1", "0", "0", ".", "1", "1", ".", "0"), nrow = 5, byrow = TRUE)

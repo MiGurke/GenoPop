@@ -7,7 +7,7 @@
 ObservedHeterozygosity(object)
 }
 \arguments{
-\item{object}{An S4 object of type myVcfR.}
+\item{object}{An S4 object of type GPvcfR.}
 }
 \value{
 Observed heterozygosity.

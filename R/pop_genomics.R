@@ -1,8 +1,8 @@
 #' FixedSites
 #'
-#' Count the number of sites fixed for an alternative allele.
+#' Count the number of sites fixed for the alternative allele ("1").
 #'
-#' @param object An S4 object of type myVcfR. Allele frequencies must be present.
+#' @param object An S4 object of type GPvcfR. Allele frequencies must be present.
 #'
 #' @return The number of fixed sites.
 #'
@@ -37,9 +37,9 @@ FixedSites <- function(object) {
 
 #' PolymorphicSites
 #'
-#' Count the number of polymorphic sites in the data set.
+#' Count the number of polymorphic sites in the data set (aka. sites not fixed for the alternative allele).
 #'
-#' @param object An S4 object of type myVcfR. Allele frequencies must be present.
+#' @param object An S4 object of type GPvcfR. Allele frequencies must be present.
 #'
 #' @return The number of polymorphic sites.
 #'
@@ -80,7 +80,7 @@ PolymorphicSites <- function(object) {
 #'
 #' Count the number of segregating sites in the data set.
 #'
-#' @param object An S4 object of type myVcfR. Allele frequencies must be present.
+#' @param object An S4 object of type GPvcfR. Allele frequencies must be present.
 #'
 #' @return The number of segregating sites.
 #'
@@ -121,7 +121,7 @@ SegregatingSites <- function(object) {
 #'
 #' Count the number of singelton sites in the data set. These are sites where a minor allele occurs only once in the sample.
 #'
-#' @param object An S4 object of type myVcfR. Allele frequencies must be present.
+#' @param object An S4 object of type GPvcfR. Allele frequencies must be present.
 #'
 #' @return The number of singelton sites.
 #'
@@ -173,7 +173,7 @@ SingeltonSites <- function(object) {
 #'
 #' Function to calculate the number of private alleles in  two populations.
 #'
-#' @param object A myVcfR object.
+#' @param object A GPvcfR object.
 #' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
 #'
 #' @return A list containing the number of private alleles for each population.
@@ -194,7 +194,7 @@ SingeltonSites <- function(object) {
 PrivateAlleles <- function(object, pop_assignments) {
 
   # Use the pop_assignments vector to separate the populations
-  separated_pops <- seperateByPopulations(object, pop_assignments, rm_ref_alleles = TRUE)
+  separated_pops <- separateByPopulations(object, pop_assignments, rm_ref_alleles = TRUE)
   pop1 <- separated_pops[[1]]
   pop2 <- separated_pops[[2]]
 
@@ -221,7 +221,7 @@ PrivateAlleles <- function(object, pop_assignments) {
 #'
 #' This function calculates the observed heterozygosity in a population.
 #'
-#' @param object An S4 object of type myVcfR.
+#' @param object An S4 object of type GPvcfR.
 #'
 #' @return Observed heterozygosity.
 #'
@@ -263,7 +263,7 @@ ObservedHeterozygosity <- function(object) {
 #'
 #' This function calculates the expected heterozygosity of a population.
 #'
-#' @param object An S4 object of type myVcfR. Allele frequencies must be present.
+#' @param object An S4 object of type GPvcfR. Allele frequencies must be present.
 #'
 #' @return Expected heterozygosity.
 #'
@@ -295,12 +295,16 @@ ExpectedHeterozygosity <- function(object) {
 
 #' Pi
 #'
-#' Calculate the average number of nucleotide differences per site between two sequences. The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
+#' Calculate the average number of nucleotide differences per site between two sequences. Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
+#' The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
+#' Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326), but for simplicity assuming that completely missing sites are invariant sites, which will underestimate Pi.
+#' Otherwise this would only function with VCF files that include all monomorphic sites, which may be unpractical given common data sets.
+#' If you happen to know the number of missing sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic sites as the sequence length to get the most accurate estimation of Pi.
 #'
-#' @param object An S4 object of type myVcfR.
+#' @param object An S4 object of type GPvcfR.
 #' @param seq_length Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.
 #'
-#' @return The nucleotide diversity (pi) per window in data frame.
+#' @return The nucleotide diversity (Pi).
 #'
 #' @examples
 #' data("mys", package = "GenoPop")
@@ -326,7 +330,7 @@ Pi <- function(object, seq_length) {
   }
 
   for (site_index in seq_len(nrow(genotype_matrix))) {
-    site_genotypes <- genotype_matrix[site_index, ]
+    site_genotypes <- genotype_matrix[site_index, genotype_matrix[site_index, ] != "."]
     site_allele_freqs <- table(site_genotypes)  # Allele frequencies at this site
 
     # Total alleles at this site (not missing)
@@ -356,7 +360,7 @@ Pi <- function(object, seq_length) {
 #'
 #' Calculate Tajima's D statistic for a given dataset, a measure for neutrality.
 #'
-#' @param object A S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.
+#' @param object A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.
 #' @param seq_length Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.
 #'
 #' @return Tajima's D value.
@@ -412,9 +416,9 @@ TajimasD <- function(object, seq_length) {
 
 #' WattersonsTheta
 #'
-#' Calculate Watterson's thea, a measure for neutrality, from an myVcfR object. The metric will be normalized by the sequence length to make it comparable between data sets.
+#' Calculate Watterson's thea, a measure for neutrality, from an GPvcfR object. The metric will be normalized by the sequence length to make it comparable between data sets.
 #'
-#' @param object A S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.
+#' @param object A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.
 #' @param seq_length The length of the sequence in the data set.
 #'
 #' @return Watterson's theta value.
@@ -447,11 +451,82 @@ WattersonsTheta <- function(object, seq_length) {
   return(WattersonsTheta / seq_length)
 }
 
+#' Dxy
+#'
+#' Calculate the average number of nucleotide differences per site (Dxy) between two populations. Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.52699).
+#' Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326), but for simplicity assuming that completely missing sites are invariant sites, which will underestimate Dxy.
+#' Otherwise this would only function with VCF files that include all monomorphic sites, which may be unpractical given common data sets.
+#' If you happen to know the number of missing sites vs the number of monomorphic sites, please just use the number of monomorphic + the number of polymorphic sites as the sequence length to the the most accurate estimation of Dxy.
+#'
+#' @param object A GPvcfR object.
+#' @param pop_assignments A named vector with elements being the population names and names being the individual names.
+#' @param seq_length Length of the sequence in number of bases, including monomorphic sites.
+#'
+#' @return The average number of nucleotide substitutions per sitej between the individuals of two populations (Dxy).
+#'
+#' @examples
+#' data("mys", package = "GenoPop")
+#' mys1 <- c("8449", "8128", "8779")
+#' mys2 <- c("8816", "8823", "8157")
+#' individuals <- c(mys1, mys2)
+#' pop_names <- c(rep("pop1", length(mys1)), rep("pop2", length(mys2)))
+#' pop_assignments <- setNames(pop_names, individuals)
+#' Dxy(mys, pop_assignments, 265392)
+#'
+#' @export
+
+Dxy <- function(object, pop_assignments, seq_length) {
+  # Check for necessary components in the object
+  if (!("sep_gt" %in% slotNames(object))) {
+    stop("The object does not have the necessary sep_gt component.")
+  }
+
+  # Separate the populations according to the population assignments
+  separated_pops <- separateByPopulations(object, pop_assignments, rm_ref_alleles = FALSE)
+  pop1 <- separated_pops[[1]]
+  pop2 <- separated_pops[[2]]
+
+  # Get the genotype matrices for both populations
+  genotypes1 <- if (!is.null(pop1@imp_gt) && nrow(pop1@imp_gt) != 0) pop1@imp_gt else pop1@sep_gt
+  genotypes2 <- if (!is.null(pop2@imp_gt) && nrow(pop2@imp_gt) != 0) pop2@imp_gt else pop2@sep_gt
+
+  # Initialize counters for nucleotide differences and comparisons
+  total_diffs <- 0
+  total_comparisons <- 0
+
+  # Iterate over polymorphic sites
+  for (site_index in seq_len(nrow(genotypes1))) {
+    site_genotypes1 <- genotypes1[site_index, ]
+    site_genotypes2 <- genotypes2[site_index, ]
+
+    # Calculate differences for each allele combination between populations
+    for (i in seq_along(site_genotypes1)) {
+      for (j in seq_along(site_genotypes2)) {
+        if (site_genotypes1[i] != "." && site_genotypes2[j] != ".") {
+          total_diffs <- total_diffs + as.numeric(site_genotypes1[i] != site_genotypes2[j])
+          total_comparisons <- total_comparisons + 1
+        }
+      }
+    }
+  }
+
+  # Include monomorphic sites in total comparisons
+  # Assuming all sites not in VCF are monomorphic and have no differences
+  monomorphic_sites <- seq_length - nrow(genotypes1)
+  total_comparisons <- total_comparisons + (monomorphic_sites * ncol(genotypes1) * ncol(genotypes2))
+
+  # Calculate Dxy
+  dxy_value <- total_diffs / total_comparisons
+
+  return(dxy_value)
+}
+
+
 #' Fst
 #'
-#' Calculate the mean or weighted (by number of non missing chromsomes) fixiation index (Fst) from two populations in a list of myVcfR objects using the method of Weir and Cockerham (1984).
+#' Calculate the mean or weighted (by number of non missing chromsomes) fixiation index (Fst) from two populations in a list of GPvcfR objects using the method of Weir and Cockerham (1984).
 #'
-#' @param object A myVcfR object.
+#' @param object A GPvcfR object.
 #' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
 #' @param weighted Logical, wether weighted Fst or mean Fst is returned. (Default = FALSE (mean Fst is returned))
 #'
@@ -477,7 +552,7 @@ Fst <- function(object, pop_assignments, weighted = FALSE) {
   }
 
   # Separate the populations
-  separated_pops <- seperateByPopulations(object, pop_assignments, rm_ref_alleles = FALSE)
+  separated_pops <- separateByPopulations(object, pop_assignments, rm_ref_alleles = FALSE)
   pop1 <- separated_pops[[1]]
   pop2 <- separated_pops[[2]]
 
@@ -516,10 +591,6 @@ Fst <- function(object, pop_assignments, weighted = FALSE) {
 
   # Calculate average allele frequencies across populations
   mean_freqs <- (allele_freqs1 + allele_freqs2) / 2
-
-  if (nrow(genotype_matrix1) < 5){
-    print(mean_freqs)
-  }
 
   # Determine the number of loci
   num_loci <- nrow(allele_freqs1)
@@ -564,7 +635,6 @@ Fst <- function(object, pop_assignments, weighted = FALSE) {
     if (weighted) {
       weights <- c(weights, (n1+n2))
     }
-    #print(Fst_locus)
     Fsts <- c(Fsts, Fst_locus)
   }
 
@@ -582,9 +652,9 @@ Fst <- function(object, pop_assignments, weighted = FALSE) {
 
 #' OneDimSFS
 #'
-#' Calculate a one dimensional site frequency spectrum from an myVcfR object.
+#' Calculate a one dimensional site frequency spectrum from an GPvcfR object.
 #'
-#' @param object A S4 object of type myVcfR. Allele frequencies and genotype matrix must be present.
+#' @param object A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.
 #' @param folded Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned. For the unfolded it is assumed that the genotype "0" represents the ancestral state in the data. (Default is unfolded (FALSE).)
 #'
 #' @return Site frequency spectrum as a named vector
@@ -661,36 +731,50 @@ OneDimSFS <- function(object, folded = FALSE) {
 
 #' TwoDimSFS
 #'
-#' Calculate a two-dimensional site frequency spectrum from a list of two myVcfR objects.
+#' Calculate a two-dimensional site frequency spectrum from a list of two GPvcfR objects.
 #'
-#' @param objects A list of two S4 objects of type myVcfR. Allele frequencies and genotype matrices must be present.
+#' @param object A GPvcfR object.
+#' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
 #' @param folded Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned. (Default is unfolded (FALSE).)
 #'
 #' @return Two-dimensional site frequency spectrum as a matrix
 #'
 #' @examples
+#' mys1 <- c("8449", "8128", "8779")
+#' mys2 <- c("8816", "8823", "8157")
+#'
+#' individuals <- c(mys1, mys2)
+#' pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
+#' pop_assignments <- setNames(pop_names, individuals)
+#'
 #' data("mys", package = "GenoPop")
-#' data("dav", package = "GenoPop")
-#' TwoDimSFS(list(mys, dav), folded = TRUE)
+#'
+#' TwoDimSFS(mys, pop_assignments, folded = TRUE)
 #'
 #' @export
 
-TwoDimSFS <- function(objects, folded = FALSE) {
-  if (length(objects) != 2) {
-    stop("Please provide a list of two myVcfR objects.")
+TwoDimSFS <- function(object, pop_assignments, folded = FALSE) {
+  # Check for necessary components in the object
+  if (!all(c("sep_gt", "allele_freqs") %in% slotNames(object))) {
+    stop("The object does not have the necessary components.")
   }
 
-  # Extract the variant information
-  variant_info1 <- objects[[1]]@fix
-  variant_info2 <- objects[[2]]@fix
+  # Separate the populations
+  separated_pops <- separateByPopulations(object, pop_assignments, rm_ref_alleles = FALSE)
+  pop1 <- separated_pops[[1]]
+  pop2 <- separated_pops[[2]]
 
   # Extract the genotype matrices
-  sep1 <- objects[[1]]@sep_gt
-  imp1 <- objects[[1]]@imp_gt
+  sep1 <- pop1@sep_gt
+  imp1 <- pop1@imp_gt
   genotype_matrix1 <- if (is.null(imp1) || nrow(imp1) == 0) sep1 else imp1
-  sep2 <- objects[[2]]@sep_gt
-  imp2 <- objects[[2]]@imp_gt
+  sep2 <- pop2@sep_gt
+  imp2 <- pop2@imp_gt
   genotype_matrix2 <- if (is.null(imp2) || nrow(imp2) == 0) sep2 else imp2
+
+  # Extract the variant information
+  variant_info1 <- pop1@fix
+  variant_info2 <- pop2@fix
 
   # Replace '.' with NA for missing data and convert to numeric
   genotype_matrix1[genotype_matrix1 == "."] <- NA

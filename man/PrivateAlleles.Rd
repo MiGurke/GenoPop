@@ -7,7 +7,7 @@
 PrivateAlleles(object, pop_assignments)
 }
 \arguments{
-\item{object}{A myVcfR object.}
+\item{object}{A GPvcfR object.}
 
 \item{pop_assignments}{A named vector. Elements are the population names and names are the individual name.}
 }

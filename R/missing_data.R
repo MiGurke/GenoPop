@@ -15,7 +15,7 @@
 
 rmMissingData <- function(object, threshold = 0.1) {
   # Check if needed slots are available, if not create them
-  if (!inherits(object, "myVcfR") | !("ploidy" %in% slotNames(object)) | !("sep_gt" %in% slotNames(object))) {
+  if (!inherits(object, "GPvcfR") | nrow(object@sep_gt) == 0) {
     message("Calculating ploidy and separating genotype data...")
     object <- calculatePloidyAndSepGT(object)
   }
@@ -115,11 +115,8 @@ rmMissingData <- function(object, threshold = 0.1) {
 #' @export
 
 imputeMissingData <- function(object, method = "mean", ...) {
-  # Check if needed slots are available, if not create them
-  if (!inherits(object, "myVcfR") | !("ploidy" %in% slotNames(object)) | !("sep_gt" %in% slotNames(object))) {
-    message("Calculating ploidy and separating genotype data...")
-    object <- calculatePloidyAndSepGT(object)
-  }
+ # This is not removing anything, just utilizing that functions ability to prepare the data and get stats about the amount of missing data.
+ object <- rmMissingData(object, threshold = 1)
  sep_gt <- object@sep_gt
  if (method == "mean") {
    # Extract additional arguments for 'mean'
@@ -181,9 +178,9 @@ imputeMissingData <- function(object, method = "mean", ...) {
 
 #' meanImputation
 #'
-#' Use the mean over each variant or individual to replace missing data with that mean. Mean is rounded to keep genotype integers, so this just corresponds to the most often occuring genotyp.
+#' Use the mean over each variant or individual to replace missing data with that mean. Mean is rounded to keep genotype integers, so this just corresponds to the most often occuring genotyp. If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
 #'
-#' @param sep_gt Seperated genotype matrix from myvcfR object.
+#' @param sep_gt separated genotype matrix from myvcfR object.
 #' @param mode Means are calculated either yb "variant" or by "individual".
 #'
 #' @return Matrix with imputed missing data.
@@ -271,13 +268,16 @@ knn_imputeR <- function(data, k) {
 
 #' kNNImputation
 #'
-#' @param sep_gt A seperated genotype matrix from a myvcfR object.
+#' Function to execute the paralellized imputation of missing data using a k-nearest-neighbor algorithm. Imputation is done in chunks of SNP's though the genome. The size of the chunks needs to be chosen carefully, as larger chunks may give more accuracy to an extend (assuming that region very far apart in the genome are likely not neighbors any way, because they should be more different from closer regions), but will increase computation demand drastically. This implementation of the algorithm uses the annoy library (https://github.com/spotify/annoy) to detect the neighbors more efficiently. Neighboring SNP's with no data for the individual to be imputed, will be exculded. This can lead to some positions left missing, if there are individuals with large proportions of missing data. The number of neighbours k, also needs to be chosen wisely. Larger k's might give more accuracy but will also increase the computational needs, although not as drastically as for the chunk size. *I will carry out some more formal tests on this algortihm soon and will include more information about this here soon.* If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
+#'
+#' @param sep_gt A separated genotype matrix from a GPvcfR object.
 #' @param k Number of nearest neighbours used for imputation, default: 3.
 #' @param chunk_size Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.
+#' @param threads Number of threads used for the computation. Default is one less then available on the system.
 #' @param write_log Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.
 #' @param logfile Name of the log file, if write_log is true.
 #'
-#' @return A seperated genotype matrix from a myvcfR object, but with imputed missing values.
+#' @return A separated genotype matrix from a GPvcfR object, but with imputed missing values.
 #' @export
 #'
 #' @examples
@@ -285,7 +285,7 @@ knn_imputeR <- function(data, k) {
 #' kNNImputation(example_matrix, k = 3, chunk_size = 1000)
 #' @export
 
-kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, write_log = FALSE, logfile = "logfile.txt") {
+kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, threads = NULL, write_log = FALSE, logfile = "logfile.txt") {
   # Convert missing values ("." entries) to NA
   sep_gt[sep_gt == "."] <- NA
   # Count NAs before imputation
@@ -297,7 +297,12 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, write_log = FALSE, l
   # Determine the number of chunks and cores to use
   num_rows <- nrow(genotype_matrix)
   num_chunks <- ceiling(num_rows / chunk_size)
-  num_cores <- min(detectCores() - 1, num_chunks)
+  # Determine the number of cores
+  if (is.null(threads)){
+    num_cores <- min(detectCores() - 1, num_chunks) # Reserve one core for the system
+  } else {
+    num_cores <- min(threads, num_chunks)
+  }
 
   # Splitting matrix into chunks
   chunks <- list()
@@ -368,14 +373,17 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, write_log = FALSE, l
 
 #' rfImputation
 #'
-#' @param sep_gt A seperated genotype matrix from a myvcfR object.
+#' Missing data imputation using the random forest algorithm implemented in missForest R package. Computation is parallelized. Imputation is done in chunks of SNP's though the genome. The size of the chunks needs to be chosen carefully, as larger chunks may give more accuracy to an extend (assuming that region very far apart in the genome are likely not neighbors any way, because they should be more different from closer regions), but will increase computation demand drastically. *I will carry out some more formal tests on this algortihm soon and will include more information about this here soon.* If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
+#'
+#' @param sep_gt A separated genotype matrix from a myvcfR object.
 #' @param maxiter The number of improvement iterations the random forest algorithm (missForest) runs.
 #' @param ntree The number of decision trees in the random forest.
 #' @param chunk_size Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.
+#' @param threads Number of threads used for the computation. Default is one less then available on the system.
 #' @param write_log Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.
 #' @param logfile Name of the log file, if write_log is true.
 #'
-#' @return A seperated genotype matrix from a myvcfR object, but with imputed missing values.
+#' @return A separated genotype matrix from a myvcfR object, but with imputed missing values.
 #' @export
 #'
 #' @examples
@@ -384,7 +392,7 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, write_log = FALSE, l
 #'
 #' @export
 
-rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000, write_log = FALSE, logfile = "logfile.txt") {
+rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000, threads = NULL, write_log = FALSE, logfile = "logfile.txt") {
 
   # Convert missing values ("." entries) to NA
   sep_gt[sep_gt == "."] <- NA
@@ -398,7 +406,12 @@ rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000, w
   # Determine the number of chunks and cores to use
   num_rows <- nrow(genotype_matrix)
   num_chunks <- ceiling(num_rows / chunk_size)
-  num_cores <- min(detectCores() - 1, num_chunks)
+  # Determine the number of cores
+  if (is.null(threads)){
+    num_cores <- min(detectCores() - 1, num_chunks) # Reserve one core for the system
+  } else {
+    num_cores <- min(threads, num_chunks)
+  }
 
   # Splitting matrix into chunks
   chunks <- list()

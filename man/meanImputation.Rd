@@ -7,7 +7,7 @@
 meanImputation(sep_gt, mode = "variant")
 }
 \arguments{
-\item{sep_gt}{Seperated genotype matrix from myvcfR object.}
+\item{sep_gt}{separated genotype matrix from myvcfR object.}
 
 \item{mode}{Means are calculated either yb "variant" or by "individual".}
 }
@@ -15,7 +15,7 @@ meanImputation(sep_gt, mode = "variant")
 Matrix with imputed missing data.
 }
 \description{
-Use the mean over each variant or individual to replace missing data with that mean. Mean is rounded to keep genotype integers, so this just corresponds to the most often occuring genotyp.
+Use the mean over each variant or individual to replace missing data with that mean. Mean is rounded to keep genotype integers, so this just corresponds to the most often occuring genotyp. If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
 }
 \examples{
 example_matrix <- matrix(c("0", "1", ".", "1", "1", ".", "0", "0", ".", "1", "1", ".", "0", "0", "0", "0", ".", "1", "0", "0", ".", "1", "1", ".", "0"), nrow = 5, byrow = TRUE)

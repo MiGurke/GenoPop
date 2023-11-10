@@ -7,15 +7,19 @@
 Pi(object, seq_length)
 }
 \arguments{
-\item{object}{An S4 object of type myVcfR.}
+\item{object}{An S4 object of type GPvcfR.}
 
 \item{seq_length}{Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.}
 }
 \value{
-The nucleotide diversity (pi) per window in data frame.
+The nucleotide diversity (Pi).
 }
 \description{
-Calculate the average number of nucleotide differences per site between two sequences. The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
+Calculate the average number of nucleotide differences per site between two sequences. Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
+The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
+Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326), but for simplicity assuming that completely missing sites are invariant sites, which will underestimate Pi.
+Otherwise this would only function with VCF files that include all monomorphic sites, which may be unpractical given common data sets.
+If you happen to know the number of missing sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic sites as the sequence length to get the most accurate estimation of Pi.
 }
 \examples{
 data("mys", package = "GenoPop")

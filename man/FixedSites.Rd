@@ -7,13 +7,13 @@
 FixedSites(object)
 }
 \arguments{
-\item{object}{An S4 object of type myVcfR. Allele frequencies must be present.}
+\item{object}{An S4 object of type GPvcfR. Allele frequencies must be present.}
 }
 \value{
 The number of fixed sites.
 }
 \description{
-Count the number of sites fixed for an alternative allele.
+Count the number of sites fixed for the alternative allele ("1").
 }
 \examples{
 data("real", package = "GenoPop")

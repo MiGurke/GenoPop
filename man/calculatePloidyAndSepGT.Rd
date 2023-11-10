@@ -17,7 +17,7 @@ A S4 object of the same class but with following slots added:
 }
 }
 \description{
-Calculate ploidy levels and separate the genotypes into a matrix according to the ploidy.
+Calculate ploidy levels and separate the genotypes into a matrix according to the ploidy. This function is mainly used internally. If you want to these oprations, its easier to start here :  \code{\link{calculateAlleleFreqs}}
 }
 \examples{
 data("real", package = "GenoPop")

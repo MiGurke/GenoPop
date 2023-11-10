@@ -9,7 +9,7 @@ calculateAlleleFreqs(object, missing_data = "none", ...)
 \arguments{
 \item{object}{A S4 object of class vcfR.}
 
-\item{missing_data}{Method to deal with missing data. Options are "remove", "impute", "none". Default is "none". In case of "remove", function needs the additional parameter threshold, which is the fraction of missing data in a variant that is still acceptable. In case of "impute" the function needs the additional parameters "method", with which the imputation method can be chosen. See \code{\link{imputeMissingData}}}
+\item{missing_data}{Method to deal with missing data. Options are "remove", "impute", "none". Default is "none". In case of "remove", function needs the additional parameter threshold, which is the fraction of missing data in a variant that is still acceptable. In case of "impute" the function needs the additional parameters "method", with which the imputation method can be chosen.}
 
 \item{...}{Additional parameters for how to deal with missing data. For imputation see \code{\link{imputeMissingData}} and for removal see \code{\link{rmMissingData}}.}
 }
@@ -17,10 +17,13 @@ calculateAlleleFreqs(object, missing_data = "none", ...)
 A S4 object of the same class but with following slots added:
 \itemize{
 \item allele_freqs (data frame)
+\item sep_gt (matrix)
+\item if missing data imputation was done: imp_gt (matrix)
+\item missing_data (list)
 }
 }
 \description{
-Calculate allele frequencies from a vcfR object. Will also add the slots ploidy and sep_gt, if not already present.
+Calculate allele frequencies from a vcfR object. Will also add the slots ploidy, sep_gt, and missing_data, if not already present.
 }
 \examples{
 data("real", package = "GenoPop")
