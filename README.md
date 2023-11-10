@@ -50,7 +50,8 @@ For proper compression of vcf's newly generated, you need to have tabix installe
   * doParallel
   * parallel
   * missForest
-    
+
+
 They can also installed via conda, if needed.
 
 ## Getting started
