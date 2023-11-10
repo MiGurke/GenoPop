@@ -1,3 +1,6 @@
 [submodule "src/annoy"]
 	path = src/annoy
 	url = https://github.com/spotify/annoy
+[submodule "annoy"]
+	path = annoy
+	url = https://github.com/spotify/annoy.git

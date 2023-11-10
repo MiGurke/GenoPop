@@ -1,8 +1,8 @@
 #include <Rcpp.h>
 #include <cmath>  // for std::sqrt() and std::round()
 using namespace Rcpp;
-#include "annoy/src/annoylib.h"
-#include "annoy/src/kissrandom.h"
+#include "../annoy/src/annoylib.h"
+#include "../annoy/src/kissrandom.h"
 using namespace Annoy;
 
 // Function to calculate distance considering missing data
