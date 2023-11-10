@@ -18,6 +18,13 @@ Before installing GenoPop, make sure you have R installed on your system. You ca
 ### Installing GenoPop from GitHub
 
 To install the GenoPop package directly from GitHub, you will need the `devtools` package in R. If you don't have `devtools` installed, you can install it by running the following command in R:
+  * vcfR
+  * methods
+  * Rcpp
+  * foreach
+  * doParallel
+  * parallel
+  * missForest
 
 ```R
 install.packages("devtools")
@@ -42,7 +49,8 @@ and your ready to go!
 
 ### Dependencies
 
-For proper compression of vcf's newly generated, you need to have tabix installed on your machine. All other dependencies are supposed to be handled by R itself.
+For proper compression of vcf's newly generated, you need to have tabix installed on your machine. All other dependencies are supposed to be handled by R itself. If that is causing any problems, these are the other R packages GenoPop depends on:
+
 
 ## Getting started
 
