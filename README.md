@@ -26,7 +26,7 @@ On clusters like curta or mfn it is easiest to create a new conda environment an
 
 ```
 conda install -c conda-forge r-devtools
-``
+```
 
 Once devtools is installed, you can install GenoPop using the install_github function. Run the following commands in your R console:
 
