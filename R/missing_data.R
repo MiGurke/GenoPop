@@ -143,10 +143,6 @@ imputeMissingData <- function(object, method = "mean", ...) {
    if (!"logfile" %in% names(kNN_args)) {
      kNN_args$logfile <- "log_kNN.txt"
    }
-   if (!"chunk_size" %in% names(kNN_args)) {
-     message("No chunk size provided for kNN imputation. Will use chunk_size=1000 per default.")
-     kNN_args$chunk_size <- 1000
-   }
   imputed_matrix <- kNNImputation(sep_gt, k = kNN_args$k, chunk_size = kNN_args$chunk_size, write_log = kNN_args$write_log, logfile = kNN_args$logfile)
  } else if (method == "rf") {
    rf_args <- list(...)
