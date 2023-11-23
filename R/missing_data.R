@@ -369,7 +369,7 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, threads = NULL, writ
   na_count_after <- sum(imputed_matrix == ".")
 
   # Display message
-  message(paste0("kNN was able to impute ", as.character(na_count_before - na_count_after), " out of ", as.character(na_count_before)), " missing genotypes." )
+  message(paste0("kNN was able to impute ", as.character(na_count_before)), " missing genotypes." )
 
   colnames(imputed_matrix) <- colnames(sep_gt)
   return(imputed_matrix)

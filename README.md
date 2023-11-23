@@ -22,6 +22,11 @@ To install the GenoPop package directly from GitHub, you will need the `devtools
 ```R
 install.packages("devtools")
 ```
+On clusters like curta or mfn it is easiest to create a new conda environment and then install devtools via conda with this command: 
+
+```
+conda install -c conda-forge r-devtools
+```
 
 Once devtools is installed, you can install GenoPop using the install_github function. Run the following commands in your R console:
 
@@ -37,7 +42,17 @@ and your ready to go!
 
 ### Dependencies
 
-For proper compression of vcf's newly generated, you need to have tabix installed on your machine. All other dependencies are supposed to be handled by R itself.
+For proper compression of vcf's newly generated, you need to have tabix installed on your machine. All other dependencies are supposed to be handled by R itself. If that is causing any problems, these are the other R packages GenoPop depends on:
+  * vcfR
+  * methods
+  * Rcpp
+  * foreach
+  * doParallel
+  * parallel
+  * missForest
+
+
+They can also installed via conda, if needed.
 
 ## Getting started
 
