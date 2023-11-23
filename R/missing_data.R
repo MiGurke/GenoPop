@@ -133,10 +133,6 @@ imputeMissingData <- function(object, method = "mean", ...) {
      message("No k for kNN imputation provided. Will use k=3 per default.")
      kNN_args$k <- 3
    }
-   if (!"chunk_size" %in% names(kNN_args)) {
-     message("No chunk size provided for kNN imputation. Will use chunk_size=1000 per default.")
-     kNN_args$chunk_size <- 1000
-   }
    if (!"write_log" %in% names(kNN_args)) {
      kNN_args$write_log <- FALSE
    }
@@ -147,7 +143,11 @@ imputeMissingData <- function(object, method = "mean", ...) {
      message("No chunk size provided for kNN imputation. Will use chunk_size=1000 per default.")
      kNN_args$chunk_size <- 1000
    }
-  imputed_matrix <- kNNImputation(sep_gt, k = kNN_args$k, chunk_size = kNN_args$chunk_size, write_log = kNN_args$write_log, logfile = kNN_args$logfile)
+   if (!"threads" %in% names(kNN_args)) {
+     message("No number of threads provided for kNN imputation. Will use only 1 then.")
+     kNN_args$threads <- 1
+   }
+  imputed_matrix <- kNNImputation(sep_gt, k = kNN_args$k, chunk_size = kNN_args$chunk_size, write_log = kNN_args$write_log, logfile = kNN_args$logfile, threads = kNN_args$threads)
  } else if (method == "rf") {
    rf_args <- list(...)
    if (!"maxiter" %in% names(rf_args)){
@@ -168,7 +168,11 @@ imputeMissingData <- function(object, method = "mean", ...) {
    if (!"logfile" %in% names(rf_args)) {
      rf_args$logfile <- "log_rf.txt"
    }
-  imputed_matrix <- rfImputation(sep_gt, maxiter = rf_args$maxiter, ntree = rf_args$ntree, chunk_size = rf_args$chunk_size, write_log = rf_args$write_log, logfile = rf_args$logfile)
+   if (!"threads" %in% names(rf_args)) {
+     message("No number of threads provided for kNN imputation. Will use only 1 then.")
+     rf_args$threads <- 1
+   }
+  imputed_matrix <- rfImputation(sep_gt, maxiter = rf_args$maxiter, ntree = rf_args$ntree, chunk_size = rf_args$chunk_size, write_log = rf_args$write_log, logfile = rf_args$logfile, threads = rf_args$threads)
  } else {
    stop("Please provide a valid method! ('mean', 'kNN', 'rf')")
  }
