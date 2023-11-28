@@ -319,8 +319,8 @@ Pi <- function(object, seq_length) {
   imp <- object@imp_gt
   genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
 
-  N_mismatches_total <- 0
-  N_comparisons_total <- 0
+  N_mismatches_total <- as.numeric(0)
+  N_comparisons_total <- as.numeric(0)
   num_chroms <- ncol(genotype_matrix)
 
   # Check if there are any variants in this window
@@ -348,7 +348,7 @@ Pi <- function(object, seq_length) {
 
   # Including monomorphic sites
   N_monomorphic_sites <- seq_length - nrow(genotype_matrix)
-  N_pairs_total <- N_comparisons_total + (N_monomorphic_sites * num_chroms * (num_chroms - 1))
+  N_pairs_total <- as.numeric(N_comparisons_total) + (as.numeric(N_monomorphic_sites) * as.numeric(num_chroms) * (as.numeric(num_chroms) - 1))
 
   # Pi calculation for the window
   pi_value <- N_mismatches_total / N_pairs_total
@@ -491,8 +491,8 @@ Dxy <- function(object, pop_assignments, seq_length) {
   genotypes2 <- if (!is.null(pop2@imp_gt) && nrow(pop2@imp_gt) != 0) pop2@imp_gt else pop2@sep_gt
 
   # Initialize counters for nucleotide differences and comparisons
-  total_diffs <- 0
-  total_comparisons <- 0
+  total_diffs <- as.numeric(0)
+  total_comparisons <- as.numeric(0)
 
   # Iterate over polymorphic sites
   for (site_index in seq_len(nrow(genotypes1))) {
@@ -513,7 +513,7 @@ Dxy <- function(object, pop_assignments, seq_length) {
   # Include monomorphic sites in total comparisons
   # Assuming all sites not in VCF are monomorphic and have no differences
   monomorphic_sites <- seq_length - nrow(genotypes1)
-  total_comparisons <- total_comparisons + (monomorphic_sites * ncol(genotypes1) * ncol(genotypes2))
+  total_comparisons <- as.numeric(total_comparisons) + (as.numeric(monomorphic_sites) * as.numeric(ncol(genotypes1)) * as.numeric(ncol(genotypes2)))
 
   # Calculate Dxy
   dxy_value <- total_diffs / total_comparisons
