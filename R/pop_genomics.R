@@ -242,6 +242,9 @@ ObservedHeterozygosity <- function(object) {
     stop("No genotype data available in the object.")
   }
 
+  # Replace '.' with NA for missing data
+  genotype_matrix[genotype_matrix == "."] <- NA
+
   # Calculate observed heterozygosity
   num_individuals <- ncol(genotype_matrix) / 2  # assuming diploid organisms
   heterozygotes <- 0
@@ -250,7 +253,7 @@ ObservedHeterozygosity <- function(object) {
   for (indiv_col in seq(1, ncol(genotype_matrix), by = 2)) {
     individual_genotypes <- genotype_matrix[, c(indiv_col, indiv_col + 1)]
     heterozygotes <- heterozygotes + sum(apply(individual_genotypes, 1, function(locus) {
-      locus[1] != locus[2]
+        locus[1] != locus[2]
     }))
   }
 
@@ -669,6 +672,12 @@ OneDimSFS <- function(object, folded = FALSE) {
   # Extract the genotype matrix
   sep <- object@sep_gt
   imp <- object@imp_gt
+  # DEBUG
+  if (is.null(imp) || nrow(imp) == 0) {
+    message("No imputed Genotypes, using the original ones.")
+  } else {
+    message("Using imputed genotypes.")
+  }
   genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
 
   # Replace '.' with NA for missing data
@@ -677,8 +686,8 @@ OneDimSFS <- function(object, folded = FALSE) {
   # Convert the entire matrix to numeric in a vectorized manner
   genotype_matrix_numeric <- as.matrix(apply(genotype_matrix, c(1, 2), as.numeric))
 
-  # Number of individuals (assuming diploid, so 2 columns per individual)
-  num_individuals <- ncol(genotype_matrix) / 2
+  # Number of chromsomes
+  num_individuals <- ncol(genotype_matrix)
 
   # Initialize a vector to hold the site frequency spectrum
   sfs <- numeric(num_individuals + 1)  # frequencies from 0 to num_individuals
@@ -700,25 +709,13 @@ OneDimSFS <- function(object, folded = FALSE) {
       allele_count <- derived_count
     }
 
-    # Adjust the total number of alleles based on missing data
-    total_alleles_at_site <- length(valid_data)
-
-    # Skip sites with no valid data
-    if (total_alleles_at_site == 0) next
-
-    # Calculate the frequency, adjusting for the varying number of valid alleles
-    freq_index <- allele_count * (num_individuals) / total_alleles_at_site
-
-    # Round to the nearest integer to get the discrete frequency category
-    freq_category <- round(freq_index) + 1  # R is 1-indexed
-
     # Update the SFS
-    sfs[freq_category] <- sfs[freq_category] + 1
+    sfs[allele_count] <- sfs[allele_count] + 1
   }
 
   # Name the vector elements for clearer interpretation
   names(sfs) <- 0:num_individuals
-  # For a folded SFS, remove the redundant second half of the vector
+  # For a folded SFS, remove the redundant second half of the vector (it only consist of zero's..)
   if (folded) {
     # Determine the midpoint of the vector
     midpoint <- ceiling((num_individuals + 1) / 2)
@@ -786,9 +783,9 @@ TwoDimSFS <- function(object, pop_assignments, folded = FALSE) {
   # Create a unified set of variants based on chromosome and position
   common_variants <- merge(variant_info1, variant_info2, by = c("CHROM", "POS"), all = TRUE)
 
-  # Number of individuals (assuming diploid, so 2 columns per individual)
-  num_individuals1 <- ncol(genotype_matrix1) / 2
-  num_individuals2 <- ncol(genotype_matrix2) / 2
+  # Number of chromosomes
+  num_individuals1 <- ncol(genotype_matrix1)
+  num_individuals2 <- ncol(genotype_matrix2)
 
   # Initialize a matrix to hold the 2d site frequency spectrum
   sfs_2d <- matrix(0, nrow = num_individuals1 + 1, ncol = num_individuals2 + 1)
@@ -822,18 +819,9 @@ TwoDimSFS <- function(object, pop_assignments, folded = FALSE) {
       allele_count1 <- derived_count1
       allele_count2 <- derived_count2
     }
-    total_alleles_at_site1 <- length(valid_data1)
-    total_alleles_at_site2 <- length(valid_data2)
-    # Calculate the frequency, adjusting for the varying number of valid alleles
-    freq_index1 <- allele_count1 * (num_individuals1) / total_alleles_at_site1
-    freq_index2 <- allele_count2 * (num_individuals2) / total_alleles_at_site2
-
-    # Round to the nearest integer to get the discrete frequency category
-    freq_category1 <- round(freq_index1) + 1  # R is 1-indexed
-    freq_category2 <- round(freq_index2) + 1
 
     # Update the 2dSFS
-    sfs_2d[freq_category1, freq_category2] <- sfs_2d[freq_category1, freq_category2] + 1
+    sfs_2d[allele_count1, allele_count2] <- sfs_2d[allele_count1, allele_count2] + 1
   }
 
   # If the SFS is folded, remove the empty categories.
