@@ -2,22 +2,60 @@
 % Please edit documentation in R/pop_genomics.R
 \name{FixedSites}
 \alias{FixedSites}
-\title{FixedSites}
+\title{Count Fixed Sites for Alternative Allele in VCF File}
 \usage{
-FixedSites(object)
+FixedSites(
+  vcf_path,
+  threads = 1,
+  write_log = FALSE,
+  logfile = "log.txt",
+  batch_size = 10000,
+  window_size = NULL,
+  skip_size = NULL
+)
 }
 \arguments{
-\item{object}{An S4 object of type GPvcfR. Allele frequencies must be present.}
+\item{vcf_path}{Path to the VCF file.}
+
+\item{threads}{Number of threads to use for parallel processing.}
+
+\item{write_log}{Logical, indicating whether to write progress logs.}
+
+\item{logfile}{Path to the log file where progress will be logged.}
+
+\item{batch_size}{The number of variants to be processed in each batch
+(used in batch mode only, default of 10,000 should be suitable for most use cases).}
+
+\item{window_size}{Size of the window for windowed analysis in base pairs (optional).
+When specified, \code{skip_size} must also be provided.}
+
+\item{skip_size}{Number of base pairs to skip between windows (optional).
+Used in conjunction with \code{window_size} for windowed analysis.}
 }
 \value{
-The number of fixed sites.
+In batch mode (no window_size or skip_size provided): A single integer representing the total number of fixed sites for the alternative allele across the entire VCF file.
+In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'FixedSites', representing the count of fixed sites within each window.
 }
 \description{
-Count the number of sites fixed for the alternative allele ("1").
+This function counts the number of sites fixed for the alternative allele ("1") in a VCF file.
+It processes the file in two modes: the entire file at once or in specified windows across the genome.
+For batch processing, it uses \code{process_vcf_in_batches}. For windowed analysis, it uses a similar
+approach but tailored to process specific genomic windows (\code{process_vcf_in_windows}).
+}
+\details{
+The function has two modes of operation:
+\enumerate{
+\item Batch Mode: Processes the entire VCF file in batches to count the total number of fixed sites for the alternative allele. Suitable for a general overview of the entire dataset.
+\item Window Mode: Processes the VCF file in windows of a specified size and skip distance. This mode is useful for identifying regions with high numbers of fixed sites, which could indicate selective sweeps or regions of low recombination.
+}
 }
 \examples{
-data("real", package = "GenoPop")
-vcf <- calculateAlleleFreqs(real, missing_data = "impute", method = "mean")
-FixedSites(vcf)
+# Batch mode example
+vcf_path <- "path/to/vcf/file"
+num_fixed_sites <- FixedSites(vcf_path, threads = 4, write_log = TRUE, logfile = "fixed_sites_log.txt")
+
+# Window mode example
+vcf_path <- "path/to/vcf/file"
+fixed_sites_df <- FixedSites(vcf_path, threads = 4, write_log = TRUE, logfile = "windowed_fixed_sites_log.txt", window_size = 100000, skip_size = 50000)
 
 }

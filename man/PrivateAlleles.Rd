@@ -2,30 +2,60 @@
 % Please edit documentation in R/pop_genomics.R
 \name{PrivateAlleles}
 \alias{PrivateAlleles}
-\title{PrivateAlleles}
+\title{Count Private Alleles in VCF File}
 \usage{
-PrivateAlleles(object, pop_assignments)
+PrivateAlleles(
+  vcf_path,
+  pop1_individuals,
+  pop2_individuals,
+  threads = 1,
+  write_log = FALSE,
+  logfile = "log.txt",
+  batch_size = 10000,
+  window_size = NULL,
+  skip_size = NULL
+)
 }
 \arguments{
-\item{object}{A GPvcfR object.}
+\item{vcf_path}{Path to the VCF file.}
 
-\item{pop_assignments}{A named vector. Elements are the population names and names are the individual name.}
+\item{pop1_individuals}{Vector of individual names belonging to the first population.}
+
+\item{pop2_individuals}{Vector of individual names belonging to the second population.}
+
+\item{threads}{Number of threads to use for parallel processing.}
+
+\item{write_log}{Logical, indicating whether to write progress logs.}
+
+\item{logfile}{Path to the log file where progress will be logged.}
+
+\item{batch_size}{The number of variants to be processed in each batch
+(used in batch mode only, default of 10,000 should be suitable for most use cases).}
+
+\item{window_size}{Size of the window for windowed analysis in base pairs (optional).
+When specified, \code{skip_size} must also be provided.}
+
+\item{skip_size}{Number of base pairs to skip between windows (optional).
+Used in conjunction with \code{window_size} for windowed analysis.}
 }
 \value{
-A list containing the number of private alleles for each population.
+In batch mode (no window_size or skip_size provided): A list containing the number of private alleles for each population.
+In window mode (window_size and skip_size provided): A list of data frames, each with columns 'Chromosome', 'Start', 'End', 'PrivateAllelesPop1', and 'PrivateAllelesPop2', representing the count of private alleles within each window for each population.
 }
 \description{
-Function to calculate the number of private alleles in  two populations.
+This function calculates the number of private alleles in two populations from a VCF file.
+It processes the file in batches or specified windows across the genome.
+For batch processing, it uses \code{process_vcf_in_batches}. For windowed analysis, it uses a similar
+approach tailored to process specific genomic windows.
 }
 \examples{
-mys1 <- c("8449", "8128", "8779")
-mys2 <- c("8816", "8823", "8157")
+# Batch mode example
+vcf_path <- "path/to/vcf/file"
+pop1_individuals <- c("8449", "8128", "8779")
+pop2_individuals <- c("8816", "8823", "8157")
+private_alleles <- PrivateAlleles(vcf_path, pop1_individuals, pop2_individuals, threads = 4, write_log = TRUE, logfile = "private_alleles_log.txt")
 
-individuals <- c(mys1, mys2)
-pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
-pop_assignments <- setNames(pop_names, individuals)
-
-data("mys", package = "GenoPop")
-PrivateAlleles(mys, pop_assignments)
+# Window mode example
+private_alleles_windows <- PrivateAlleles(vcf_path, pop1_individuals, pop2_individuals, threads = 4, write_log = TRUE, logfile = "windowed_private_alleles_log.txt", window_size = 100000, skip_size = 50000)
 
 }

@@ -1,3 +1,4 @@
+### Chnage to work with process_vcf_in_batches and write new vcf ###
 #' rmMissingData
 #'
 #' Remove variants from vcfR object with to much missing data.
@@ -98,88 +99,7 @@ rmMissingData <- function(object, threshold = 0.1) {
    return(object)
 }
 
-#' imputeMissingData
-#'
-#' Impute missing variants in genotype data stored in vcfR object.
-#'
-#' @param object A S4 object of class vcfR.
-#' @param method Method used for missing data imputation. Available are "kNN", "rf", and "mean". (Default = "mean").
-#' @param ... Additional parameters for different imputation methods. For more info look up the documentation of them:\code{\link{meanImputation}}, \code{\link{kNNImputation}}, \code{\link{rfImputation}}.
-#'
-#' @return A S4 object of the same class, but the slot imp_gt is now filled with the imputed genotype matrix.
-#'
-#' @examples
-#' data("real", package = "GenoPop")
-#' vcf <- imputeMissingData(real, method = "mean")
-#'
-#' @export
-
-imputeMissingData <- function(object, method = "mean", ...) {
- # This is not removing anything, just utilizing that functions ability to prepare the data and get stats about the amount of missing data.
- object <- rmMissingData(object, threshold = 1)
- sep_gt <- object@sep_gt
- if (method == "mean") {
-   # Extract additional arguments for 'mean'
-   mean_args <- list(...)
-   # Check if 'threshold' is provided, if not use a default value
-   if (!"mode" %in% names(mean_args)) {
-     message("No mode for mean imputation provided. Will use variant means per default.")
-     mean_args$mode <- "variant"  # Default value
-   }
-  imputed_matrix <- meanImputation(sep_gt, mode = mean_args$mode)
- } else if (method == "kNN") {
-   kNN_args <- list(...)
-   if (!"k" %in% names(kNN_args)) {
-     message("No k for kNN imputation provided. Will use k=3 per default.")
-     kNN_args$k <- 3
-   }
-   if (!"write_log" %in% names(kNN_args)) {
-     kNN_args$write_log <- FALSE
-   }
-   if (!"logfile" %in% names(kNN_args)) {
-     kNN_args$logfile <- "log_kNN.txt"
-   }
-   if (!"chunk_size" %in% names(kNN_args)) {
-     message("No chunk size provided for kNN imputation. Will use chunk_size=1000 per default.")
-     kNN_args$chunk_size <- 1000
-   }
-   if (!"threads" %in% names(kNN_args)) {
-     message("No number of threads provided for kNN imputation. Will use only 1 then.")
-     kNN_args$threads <- 1
-   }
-  imputed_matrix <- kNNImputation(sep_gt, k = kNN_args$k, chunk_size = kNN_args$chunk_size, write_log = kNN_args$write_log, logfile = kNN_args$logfile, threads = kNN_args$threads)
- } else if (method == "rf") {
-   rf_args <- list(...)
-   if (!"maxiter" %in% names(rf_args)){
-     message("No max number of refinment iterations provided for random forest imputation. Will use maxiter=10 per default.")
-     rf_args$maxiter <- 10
-   }
-   if (!"ntree" %in% names(rf_args)){
-     message("No number of trees in the forest provided for random forest imputation. Will use ntree=100 per default.")
-     rf_args$ntree <- 100
-   }
-   if (!"chunk_size" %in% names(rf_args)){
-     message("No chunk size provided for random forest imputation. Will use chunk_size=1000 per default.")
-     rf_args$chunk_size <- 1000
-   }
-   if (!"write_log" %in% names(rf_args)) {
-     rf_args$write_log <- FALSE
-   }
-   if (!"logfile" %in% names(rf_args)) {
-     rf_args$logfile <- "log_rf.txt"
-   }
-   if (!"threads" %in% names(rf_args)) {
-     message("No number of threads provided for kNN imputation. Will use only 1 then.")
-     rf_args$threads <- 1
-   }
-  imputed_matrix <- rfImputation(sep_gt, maxiter = rf_args$maxiter, ntree = rf_args$ntree, chunk_size = rf_args$chunk_size, write_log = rf_args$write_log, logfile = rf_args$logfile, threads = rf_args$threads)
- } else {
-   stop("Please provide a valid method! ('mean', 'kNN', 'rf')")
- }
- object@imp_gt <- imputed_matrix
- return(object)
-}
-
+### Change to work with process_vcf_in_batches and write new vcf ###
 #' meanImputation
 #'
 #' Use the mean over each variant or individual to replace missing data with that mean. Mean is rounded to keep genotype integers, so this just corresponds to the most often occuring genotyp. If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
@@ -269,7 +189,7 @@ knn_imputeR <- function(data, k) {
 }
 
 
-
+### Change to work with process_vcf_in_batches and write new vcf ###
 #' kNNImputation
 #'
 #' Function to execute the paralellized imputation of missing data using a k-nearest-neighbor algorithm. Imputation is done in chunks of SNP's though the genome. The size of the chunks needs to be chosen carefully, as larger chunks may give more accuracy to an extend (assuming that region very far apart in the genome are likely not neighbors any way, because they should be more different from closer regions), but will increase computation demand drastically. This implementation of the algorithm uses the annoy library (https://github.com/spotify/annoy) to detect the neighbors more efficiently. Neighboring SNP's with no data for the individual to be imputed, will be exculded. This can lead to some positions left missing, if there are individuals with large proportions of missing data. The number of neighbours k, also needs to be chosen wisely. Larger k's might give more accuracy but will also increase the computational needs, although not as drastically as for the chunk size. *I will carry out some more formal tests on this algortihm soon and will include more information about this here soon.* If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
@@ -375,6 +295,7 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, threads = NULL, writ
   return(imputed_matrix)
 }
 
+### Change to work with process_vcf_in_batches and write new vcf ###
 #' rfImputation
 #'
 #' Missing data imputation using the random forest algorithm implemented in missForest R package. Computation is parallelized. Imputation is done in chunks of SNP's though the genome. The size of the chunks needs to be chosen carefully, as larger chunks may give more accuracy to an extend (assuming that region very far apart in the genome are likely not neighbors any way, because they should be more different from closer regions), but will increase computation demand drastically. *I will carry out some more formal tests on this algortihm soon and will include more information about this here soon.* If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
@@ -388,7 +309,9 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, threads = NULL, writ
 #' @param logfile Name of the log file, if write_log is true.
 #'
 #' @return A separated genotype matrix from a myvcfR object, but with imputed missing values.
-#' @export
+#'
+#' @importFrom missForest missForest
+#' @importFrom Rsamtools bgzip indexTabix
 #'
 #' @examples
 #' example_matrix <- matrix(c("0", "1", ".", "1", "1", ".", "0", "0", ".", "1", "1", ".", "0", "0", "0", "0", ".", "1", "0", "0", ".", "1", "1", ".", "0"), nrow = 5, byrow = TRUE)
@@ -396,100 +319,95 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, threads = NULL, writ
 #'
 #' @export
 
-rfImputation <- function(sep_gt, maxiter = 10, ntree = 100, chunk_size = 1000, threads = NULL, write_log = FALSE, logfile = "logfile.txt") {
+rfImputation <- function(vcf_path, output_vcf, batch_size = 1000, maxiter = 10, ntree = 100, threads = 1, write_log = FALSE, logfile = "log.txt") {
+  # Other parameters and initial setup
 
-  # Convert missing values ("." entries) to NA
-  sep_gt[sep_gt == "."] <- NA
+  # Open the original VCF file to read the header
+  con <- file(vcf_path, "r")
+  on.exit(close(con))
 
-  # Count NAs before imputation
-  na_count_before <- sum(is.na(sep_gt))
-
-  # Convert the character matrix to a numeric matrix, coercing NA where appropriate
-  genotype_matrix <- matrix(as.numeric(sep_gt), nrow = nrow(sep_gt), ncol = ncol(sep_gt))
-
-  # Determine the number of chunks and cores to use
-  num_rows <- nrow(genotype_matrix)
-  num_chunks <- ceiling(num_rows / chunk_size)
-  # Determine the number of cores
-  if (is.null(threads)){
-    num_cores <- min(detectCores() - 1, num_chunks) # Reserve one core for the system
-  } else {
-    num_cores <- min(threads, num_chunks)
-  }
-
-  # Splitting matrix into chunks
-  chunks <- list()
-  for (i in seq_len(num_chunks)) {
-    start_row <- (i - 1) * chunk_size + 1
-    end_row <- min(i * chunk_size, num_rows)
-    chunks[[i]] <- genotype_matrix[start_row:end_row, , drop = FALSE]
-  }
-
-  #Create log file and prepare progress tracking if write log is true
-  if (write_log) {
-    message(paste0("Preparing log file ", logfile))
-    # Function to safely write to a log file
-    log_progress <- function(message, log_file) {
-      # Obtain a lock on the file to avoid write conflicts
-      fileConn <- file(log_file, open = "a")
-      tryCatch({
-        # Write the progress message
-        writeLines(message, con = fileConn)
-      }, finally = {
-        # Release the file lock
-        close(fileConn)
-      })
-    }
-    file.create(logfile)
-    # Adding identifiers to each matrix
-    chunks <- lapply(1:length(chunks), function(i) {
-      list(id = i, matrix = chunks[[i]])
-    })
-  }
-
-  # Initialize cluster
-  cl <- makeCluster(num_cores)
-  registerDoParallel(cl)
-
-  # Perform imputation in parallel
-  imputed_chunks <- foreach(chunk = chunks, .packages = "missForest") %dopar% {
-    # Do computation with or without writing progress to log file
-    if (write_log) {
-      mc <- chunk$matrix
-      id <- chunk$id
-      # Perform missForest imputation on each chunk
-      imputed_chunk <- missForest(mc, maxiter = maxiter, ntree = ntree)$ximp
-      # Ensure imputed values are integers
-      imputed_chunk <- matrix(as.character(round(as.numeric(imputed_chunk))),
-                              ncol = ncol(imputed_chunk),
-                              nrow = nrow(imputed_chunk))
-      log_progress(paste0(Sys.time(), " Completed task ", id, " of ", num_chunks, "."), logfile)
-      return(imputed_chunk)
-    } else {
-      # Perform missForest imputation on each chunk
-      imputed_chunk <- missForest(chunk, maxiter = maxiter, ntree = ntree)$ximp
-      # Ensure imputed values are integers
-      imputed_chunk <- matrix(as.character(round(as.numeric(imputed_chunk))),
-                              ncol = ncol(imputed_chunk),
-                              nrow = nrow(imputed_chunk))
-      return(imputed_chunk)
+  header_lines <- c()
+  chrom_line <- NULL
+  while (TRUE) {
+    line <- readLines(con, n = 1)
+    if (startsWith(line, "##")) {
+      header_lines <- c(header_lines, line)
+    } else if (startsWith(line, "#CHROM")) {
+      chrom_line <- line  # Save the #CHROM line separately
+      break
     }
   }
 
-  # Stop the cluster
-  stopCluster(cl)
+  # Create the comment line about imputation
+  imputation_comment <- paste("##GenoPop_rfImputation=maxiter=", maxiter, ";ntree=", ntree, ";date=", Sys.Date(), sep="")
 
-  # Combine the chunks back into a single matrix
-  imputed_matrix <- do.call(rbind, imputed_chunks)
+  # Insert the imputation comment before the #CHROM line
+  modified_header <- c(header_lines, imputation_comment, chrom_line)
 
-  # Convert NAs to "."
-  imputed_matrix[is.na(imputed_matrix)] <- "."
+  # Write the modified header to the new VCF file
+  write_lines <- function(lines, path) {
+    con <- file(path, "w")
+    on.exit(close(con))
+    writeLines(lines, con)
+  }
+  write_lines(modified_header, output_vcf)
 
-  # Display message
-  message(paste0("Random Forest was able to impute ", as.character(na_count_before)), " missing genotypes.")
+  # Define the directory to store temporary files
+  temp_dir <- dirname(output_vcf)
 
-  # Naming columns
-  colnames(imputed_matrix) <- colnames(sep_gt)
+  batch_results <- process_vcf_in_batches(vcf_path,
+                         batch_size = batch_size,
+                         threads = threads,
+                         write_log = write_log,
+                         logfile = logfile,
+                         add_packages = "missForest",
+                         custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
+                           # Convert missing values (".") to NA and prepare the matrix
+                           sep_gt[sep_gt == "."] <- NA
+                           numeric_gt <- matrix(as.numeric(sep_gt), nrow = nrow(sep_gt), ncol = ncol(sep_gt))
 
-  return(imputed_matrix)
+                           # Perform missForest imputation on the batch
+                           imputed <- missForest(numeric_gt, maxiter = maxiter, ntree = ntree)$ximp
+
+                           # Ensure imputed values are integers (0, 1, 2, etc.)
+                           imputed <- round(imputed)
+                           imputed[is.na(imputed)] <- 0  # Optionally handle any remaining NAs
+
+                           # Convert the imputed matrix back to the VCF genotype format
+                           # This step will depend on how your VCF encodes genotypes and may need adjustment
+                           vcf_formatted_gt <- apply(imputed, c(1,2), function(x) paste0(x, "|", x))  # Simple example for diploid
+
+                           # Combine the fix information with the imputed genotypes to get full VCF lines
+                           full_vcf_lines <- cbind(fix, vcf_formatted_gt)
+
+                           # Create a temporary file path in the specified directory with gzip compression
+                           temp_file <- tempfile(pattern = ".imputed_batch_", tmpdir = temp_dir, fileext = ".vcf.gz")
+
+                           # Write and compress the full VCF lines to the temporary file
+                           write.table(full_vcf_lines, gzfile(temp_file), col.names = FALSE, row.names = FALSE, quote = FALSE)
+
+                           # Return the path to the temporary file with an identifier (e.g., first position in the batch)
+                           return(list(file = temp_file, index = index))
+                         })
+
+  # Assuming batch_results is a list of lists with 'file' and 'first_pos'
+  # Sort the temporary file paths based on the first position in each batch to ensure correct order
+  ordered_temp_files <- batch_results[order(sapply(batch_results, `[[`, "index"))]
+
+  for (temp_info in ordered_temp_files) {
+    temp_file <- temp_info$file
+    # Read the compressed imputed data from each temporary file
+    imputed_data <- read.table(gzfile(temp_file))
+
+    # Append the imputed data to the final VCF file
+    write.table(imputed_data, output_vcf, append = TRUE, col.names = FALSE, row.names = FALSE, quote = FALSE, sep = "\t")
+
+    # Delete the temporary file
+    file.remove(temp_file)
+  }
+  zipped <- bgzip(output_vcf, overwrite = TRUE)
+  file.remove(output_vcf)
+  indexTabix(zipped, format = "vcf")
+  message(paste("Imputation completed. Imputed VCF written to:", zipped))
+  return(zipped)
 }

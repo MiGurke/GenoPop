@@ -1,598 +1,496 @@
-#' filterBiallelicSNPs
+#' Internal Batch Processing of VCF Data
 #'
-#' Filter for only biallelic SNPs in the data set. This function is used mainly internally and automatically when using \code{\link{calculateAlleleFreqs}}.
+#' This function is designed for efficient internal processing of large VCF files.
+#' It reads the VCF file in batches, processes each batch in parallel, and applies a custom function
+#' to the processed data. It's optimized for performance with large genomic datasets and is not
+#' intended to be used directly by end users.
 #'
-#' @param object A S4 object of class vcfR.
+#' @param vcf_path The path to the VCF file.
+#' @param batch_size The number of variants to be processed in each batch.
+#' @param custom_function A custom function that takes two arguments: a data frame similar to
+#'        the `@fix` slot of a `vcfR` object and a genotype matrix similar to the `@sep_gt` slot.
+#'        This function is applied to each batch of data.
+#' @param threads The number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile The path to the log file.
 #'
-#' @return A S4 object of the same class, but complex and multiallelic variantes are removed from the @fix and @gt slots.
+#' @details The function divides the VCF file into batches based on the specified `batch_size`.
+#'          Each batch is processed to extract fixed information and genotype data, filter for
+#'          biallelic SNPs, and then apply the `custom_function`. The function uses parallel
+#'          processing to improve efficiency and can handle large genomic datasets.
 #'
-#' @examples
-#' data("real", package = "GenoPop")
-#' vcf <- filterBiallelicSNPs(real)
+#'          This function is part of the internal workings of the package and is not intended
+#'          to be called directly by the user. It is documented for the sake of completeness
+#'          and to assist in maintenance and understanding of the package's internal mechanics.
 #'
-#' @export
+#' @return A data frame that is the combined result of applying the `custom_function` to each batch.
+#'         The structure of this data frame depends on the `custom_function` used.
+#'
+#' @keywords internal
+#'
+#' @importFrom Rsamtools TabixFile scanTabix
+#' @importFrom GenomicRanges GRanges
+#' @importFrom foreach foreach %dopar%
+#' @importFrom doParallel registerDoParallel
+#' @importFrom parallel detectCores makeCluster stopCluster
+#' @importFrom missForest missForest
+#'
+#' @noRd
 
-filterBiallelicSNPs <- function(object) {
-  # Extract fixed data
-  fixed_data <- as.data.frame(object@fix)
 
-  # Identify biallelic SNPs:
-  # - REF and ALT should be 1 base long (exclude indels)
-  # - ALT should not contain "," (exclude multi-allelic variants)
-  num_alleles <- sapply(strsplit(as.character(fixed_data$ALT), ","), length) + 1
-  biallelic_indices <- which(nchar(as.character(fixed_data$REF)) == 1 &
-                               nchar(as.character(fixed_data$ALT)) == 1 &
-                               num_alleles == 2)
+process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, threads = 1, write_log = FALSE, logfile = "logfile.txt", pop1_individuals = NULL, pop2_individuals = NULL, add_packages = NULL) {
+  tbx <- open(TabixFile(vcf_path, yieldSize=batch_size))
+  # Initialize variables
+  batch_coordinates <- list()
+  index <- 1
+  while(length(res <- scanTabix(tbx)[[1]])) {
+    # Get all chromosomes in the current batch
+    chroms <- sapply(res, function(x) strsplit(x, "\t")[[1]][1])
+    unique_chroms <- unique(chroms)
 
-  new_gt <- object@gt[biallelic_indices,]
-  new_fix <- object@fix[biallelic_indices,]
+    # Iterate over each unique chromosome and find start and end positions
+    for (chrom in unique_chroms) {
+      chrom_indices <- which(chroms == chrom)
+      first_index <- min(chrom_indices)
+      last_index <- max(chrom_indices)
 
-  message(paste0(as.character(nrow(object@gt) - nrow(new_gt)), " SNPs removed because they are not biallelic."))
+      first_variant_info <- strsplit(res[first_index], "\t")[[1]]
+      last_variant_info <- strsplit(res[last_index], "\t")[[1]]
 
-  # Subset VCF object to retain only biallelic SNPs
-  object@gt <- object@gt[biallelic_indices,]
-  object@fix <- object@fix[biallelic_indices,]
+      start_pos <- first_variant_info[2]
+      end_pos <- last_variant_info[2]
 
-  return(object)
-}
+      # Construct and store the genomic region for each chromosome segment
+    batch_coordinates <- c(batch_coordinates, paste0(index, "\t", chrom, "\t", start_pos, "\t", end_pos))
+      index <- index + 1
+    }
+  }
+  # Close the Tabix file
+  close(tbx)
 
-#' calculatePloidyAndSepGT
-#'
-#' Calculate ploidy levels and separate the genotypes into a matrix according to the ploidy. This function is mainly used internally. If you want to these oprations, its easier to start here :  \code{\link{calculateAlleleFreqs}}
-#'
-#' @param object A S4 object of class vcfR.
-#'
-#' @return A S4 object of the same class but with following slots added:
-#' * ploidy (integer)
-#' * sep_gt (matrix)
-#'
-#' @examples
-#' data("real", package = "GenoPop")
-#' vcf <- calculatePloidyAndSepGT(real)
-#' vcf@ploidy
-#' head(vcf@sep_gt)
-#'
-#' @export
+  # Get individual names:
+  # Open the VCF file
+  con <- gzfile(vcf_path, "r")
+  on.exit(close(con))
 
-calculatePloidyAndSepGT <- function(object) {
-
-  # Remove complex and multiallelic SNPs
-  object <- filterBiallelicSNPs(object)
-  gt_data <- object@gt
-  # Extract genotype data and exclude the "FORMAT" column
-  if ("FORMAT" %in% colnames(gt_data)) {
-    gt_data <- gt_data[, -1, drop = FALSE]
+  # Read lines until the header line starting with #CHROM
+  while (TRUE) {
+    line <- readLines(con, n = 1)
+    if (startsWith(line, "#CHROM")) {
+      break
+    }
   }
 
-  # Convert the matrix to a character vector
-  gt_vector <- as.character(as.vector(gt_data))
+  # Split the line and extract individual names
+  line <- strsplit(line, "\t")
+  individual_names <- line[[1]][10:length(line[[1]])]
 
-  # Check if there are multiple fields in the genotype data
-  if (any(grepl(":", gt_vector))) {
-    # Extract the GT part (assumes it's the first field)
-    gt_vector <- sapply(strsplit(gt_vector, ":"), `[`, 1)
-  }
-
-  # Reshape the extracted GT vector back into the original matrix dimensions
-  gt_data <- matrix(gt_vector, nrow = nrow(gt_data), ncol = ncol(gt_data),
-                    dimnames = list(row.names(gt_data), colnames(gt_data)))
-
-
-  # Detect separators for alleles (commonly '/' or '|')
-  separators <- unique(gsub("[^/|]", "", gt_vector))
-
-  # For simplicity, we'll assume one separator is used in the entire dataset
-  separator <- separators[1]
-
-  # Escape the pipe character if it's the separator
-  if (separator == "|") {
-    separator <- "\\|"
-  }
-
-  # Estimate ploidy level from the original genotype data
-  example_gt <- gt_vector[1]  # Using the first variant as an example
-  ploidy <- length(unlist(strsplit(example_gt, separator)))
-
-  # Separate alleles into different columns
-  separated_gt_data <- matrix(NA, nrow = nrow(gt_data), ncol = ploidy * ncol(gt_data))
-  colnames(separated_gt_data) <- paste(rep(colnames(gt_data), each = ploidy),
-                                       rep(1:ploidy, times = ncol(gt_data)),
-                                       sep = "_")
-  rownames(separated_gt_data) <- rownames(gt_data)
-
-  for (i in seq_len(nrow(gt_data))) {
-    # Get the genotype vector for the i-th variant
-    variant_gt_vector <- gt_vector[seq(i, length(gt_vector), by = nrow(gt_data))]
-
-    # Separate alleles and assign to the matrix
-    separated_gt_data[i, ] <- unlist(strsplit(variant_gt_vector, separator))
-  }
-
-  # Create an object of the new class and populate the new slots
-  new_object <- new("GPvcfR", object)
-  new_object@ploidy <- ploidy
-  new_object@sep_gt <- separated_gt_data
-
-  return(new_object)
-}
-
-
-#' separateByPopulations
-#'
-#' separates a vcfR object into new objects per population. Needs to be done prior to calculating allele frequencies.
-#'
-#' @param object A S4 object of class vcfR or GPvcfR.
-#' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
-#' @param rm_ref_alleles Logical, wether variants that only have the reference allele should be removed from the respective subpopulations object. (Default = TRUE)
-#'
-#' @return A list containing one vcfR object per population.
-#'
-#' @examples
-#' mys <- c("8449", "8128", "8779", "8816", "8823", "8157")
-#' dav <- c("8213", "8241", "8232", "8224", "10165", "8221", "8813", "8825", "8182", "8187")
-#'
-#' individuals <- c(mys, dav)
-#' pop_names <- c(rep("mys", length(mys)), rep("dav", length(dav)))
-#' pop_assignments <- setNames(pop_names, individuals)
-#'
-#' data("real", package = "GenoPop")
-#' vcfs <- separateByPopulations(real, pop_assignments)
-#'
-#' @export
-
-separateByPopulations <- function(object, pop_assignments, rm_ref_alleles = TRUE) {
-  # Ensure names of pop_assignments match colnames of the vcf genotypic data
-  if(!all(names(pop_assignments) %in% colnames(object@gt))) {
-    stop("All individual names in pop_assignments must match those in the VCF.")
-  }
-
-  # Split individual names by population
-  inds_by_pop <- split(names(pop_assignments), pop_assignments)
-
-  # Initialize a list to store the separated vcf objects
-  vcf_by_pop <- vector("list", length = length(inds_by_pop))
-  names(vcf_by_pop) <- names(inds_by_pop)
-
-  # Add the slots of GPvcfR class
-  object <- new("GPvcfR", object)
-  # Loop through each population, extract the individuals, and store in the list
-  for (pop in names(inds_by_pop)) {
-    inds <- inds_by_pop[[pop]]
-
-    # Subset the different gt slots, if they are present
-    gt_pop <- object@gt[, inds]
-    if (nrow(object@sep_gt) > 0) {
-      cols <- paste(rep(colnames(gt_pop), each = object@ploidy),
-                    rep(1:object@ploidy, times = ncol(gt_pop)),
-                    sep = "_")
-      sep_gt_pop <- object@sep_gt[, cols]
-    }
-    if (nrow(object@imp_gt) > 0) {
-      imp_gt_pop <- object@imp_gt[, cols]
-    }
-
-    gt_vector <- as.character(as.vector(gt_pop))
-    # Check if there are multiple fields in the genotype data
-    if (any(grepl(":", gt_vector))) {
-      # Extract the GT part (assumes it's the first field)
-      gt_vector <- sapply(strsplit(gt_vector, ":"), `[`, 1)
-    }
-
-    # Reshape the extracted GT vector back into the original matrix dimensions
-    gt_values <- matrix(gt_vector, nrow = nrow(gt_pop), ncol = ncol(gt_pop),
-                        dimnames = list(row.names(gt_pop), colnames(gt_pop)))
-
-    # If wanted, remove variants in each data set that only carry reference alleles
-    if (rm_ref_alleles) {
-      # Identify rows with only reference alleles for all individuals
-      non_ref_rows <- apply(gt_values, 1, function(x) !all(x %in% c("0/0", "0|0")))
-
-      # If the case happens that all rows have only the reference, create empty placeholder matrices and give a warning.
-      if (all(!non_ref_rows)) {
-        print("Test")
-        warning("One population has only the reference allele for all variants.")
-        names <- colnames(gt_pop)
-        gt_pop <- matrix(ncol = ncol(gt_pop), nrow = 0)
-        colnames(gt_pop) <- names
-        if (exists("sep_gt_pop")) {
-          names <- colnames(sep_gt_pop)
-          sep_gt_pop <- matrix(ncol = ncol(sep_gt_pop), nrow = 0)
-          colnames(sep_gt_pop) <- names
-        }
-        if (exists("imp_gt_pop")) {
-          names <- colnames(imp_gt_pop)
-          imp_gt_pop <- matrix(ncol = ncol(imp_gt_pop), nrow = 0)
-          colnames(imp_gt_pop) <- names
-        }
-        # Subset and filter @fix slot
-        names <- colnames(fix_pop)
-        fix_pop <- matrix(ncol = ncol(fix_pop), nrow = 0)
-        colnames(fix_pop) <- names
-      }
-      # Filter genotype matrices for only non-reference genotypes
-      gt_pop <- gt_pop[non_ref_rows, , drop = FALSE]
-      if (exists("sep_gt_pop")) {
-        sep_gt_pop <- sep_gt_pop[non_ref_rows, , drop = FALSE]
-      }
-      if (exists("imp_gt_pop")) {
-        imp_gt_pop <- imp_gt_pop[non_ref_rows, , drop = FALSE]
-      }
-      # Subset and filter @fix slot
-      fix_pop <- object@fix[non_ref_rows, , drop = FALSE]
-    } else {
-      fix_pop <- object@fix
-    }
-
-    # Common @meta slot
-    meta_pop <- object@meta
-
-    # Create a new vcfR object
-    vcf_pop <- object
-    vcf_pop@fix <- fix_pop
-    vcf_pop@meta <- meta_pop
-    vcf_pop@gt <- gt_pop
-    if (exists("sep_gt_pop")) {
-      vcf_pop@sep_gt <- sep_gt_pop
-    }
-    if (exists("imp_gt_pop")) {
-      vcf_pop@imp_gt <- imp_gt_pop
-    }
-    if (nrow(object@allele_freqs) > 0) {
-      vcf_pop@allele_freqs <- calculateAlleleFreqs(vcf_pop)@allele_freqs
-    }
-
-
-    # Store the vcfR object in the list
-    vcf_by_pop[[pop]] <- vcf_pop
-  }
-
-  return(vcf_by_pop)
-}
-
-
-#' calculateAlleleFreqs
-#'
-#' Calculate allele frequencies from a vcfR object. Will also add the slots ploidy, sep_gt, and missing_data, if not already present.
-#'
-#' @param object A S4 object of class vcfR.
-#' @param missing_data Method to deal with missing data. Options are "remove", "impute", "none". Default is "none". In case of "remove", function needs the additional parameter threshold, which is the fraction of missing data in a variant that is still acceptable. In case of "impute" the function needs the additional parameters "method", with which the imputation method can be chosen.
-#' @param ... Additional parameters for how to deal with missing data. For imputation see \code{\link{imputeMissingData}} and for removal see \code{\link{rmMissingData}}.
-#'
-#' @return A S4 object of the same class but with following slots added:
-#' * allele_freqs (data frame)
-#' * sep_gt (matrix)
-#' * if missing data imputation was done: imp_gt (matrix)
-#' * missing_data (list)
-#'
-#'
-#' @examples
-#' data("real", package = "GenoPop")
-#' vcf <- calculateAlleleFreqs(real, missing_data = "none")
-#' vcf <- calculateAlleleFreqs(real, missing_data = "remove", threshold = 0.1)
-#' vcf <- calculateAlleleFreqs(real, missing_data = "impute", method = "mean")
-#' head(vcf@allele_freqs)
-#'
-#' @export
-
-calculateAlleleFreqs <- function(object, missing_data = "none", ...) {
-
-  # Check if needed slots are available, if not create them
-  if (!inherits(object, "GPvcfR") | !("ploidy" %in% slotNames(object)) | !("sep_gt" %in% slotNames(object))) {
-    message("Calculating ploidy and separating genotype data...")
-    object <- calculatePloidyAndSepGT(object)
-  }
-
-  if (missing_data == "remove") {
-    # Extract additional arguments for 'remove'
-    remove_args <- list(...)
-    # Check if 'threshold' is provided, if not use a default value
-    if (!"threshold" %in% names(remove_args)) {
-      message("Threshold not provided for missing_data='remove'. Using default threshold of 0.1.")
-      remove_args$threshold <- 0.1  # Default value
-    }
-    object <- rmMissingData(object, remove_args$threshold)
-    separated_gt_data <- object@sep_gt
-
-  } else if (missing_data == "impute") {
-    # Extract additional arguments for 'impute'
-    impute_args <- list(...)
-    # Check if 'imputation_method' is provided, if not use a default value
-    if (!"method" %in% names(impute_args)) {
-      message("No valid imputation method provided for missing_data='impute'. Will use method='mean' per default.")
-      impute_args$method = "mean"
-    }
-    if (!"write_log" %in% names(impute_args)) {
-      impute_args$write_log = "FALSE"
-    }
-    if (!"logfile" %in% names(impute_args)) {
-      impute_args$logfile = "imputation_log.txt"
-    }
-    # This is to calculate stats about the missing data without removing them.
-    object <- rmMissingData(object, 1)
-    object <- imputeMissingData(object, impute_args$method, write_log =  impute_args$write_log, logfile =  impute_args$logfile)
-    separated_gt_data <- object@imp_gt
-  } else if (missing_data == "none") {
-    # This is to calculate stats about the missing data without removing them.
-    object <- rmMissingData(object, 1)
-    separated_gt_data <- object@sep_gt
+  # Determine the number of cores
+  if (is.null(threads)) {
+    num_cores <- detectCores() - 1  # Reserve one core for the system
   } else {
-    stop("Please provide a valid way to deal with missing data! ('none', 'remove', or 'impute')")
+    num_cores <- threads
   }
 
-  # Calculate Allele Frequencies
-  allele_frequencies_per_site <- vector("list", length = nrow(separated_gt_data))
-  unique_alleles <- unique(as.vector(separated_gt_data))[unique(as.vector(separated_gt_data)) != "."]
-  for (i in seq_len(nrow(separated_gt_data))) {
-    alleles <- separated_gt_data[i, ]
+  # Set up the parallel backend
+  cl <- makeCluster(num_cores)
+  registerDoParallel(cl)
+
+  # Prepare log file if write_log is true
+  #Create log file and prepare progress tracking if write log is true
+  if (write_log) {
+    message(paste0("Preparing log file ", logfile))
+    # Function to safely write to a log file
+    log_progress <- function(message, log_file) {
+      # Obtain a lock on the file to avoid write conflicts
+      fileConn <- file(log_file, open = "a")
+      tryCatch({
+        # Write the progress message
+        writeLines(message, con = fileConn)
+      }, finally = {
+        # Release the file lock
+        close(fileConn)
+      })
+    }
+    file.create(logfile)
+  }
+
+  if (!is.null(add_packages)) {
+    packages = c("Rsamtools", "GenomicRanges", add_packages)
+  } else {
+    packages = c("Rsamtools", "GenomicRanges")
+  }
+
+  # Perform the calculations in parallel
+  results <- foreach(batch_coord = batch_coordinates, .packages = packages) %dopar% {
+    tryCatch({
+      # Extract chromosome and positions from the batch coordinates
+      coords <- strsplit(batch_coord, "\t")[[1]]
+      index <- as.numeric(coords[1])
+      chrom <- coords[2]
+      start_pos <- as.numeric(coords[3])
+      end_pos <- as.numeric(coords[4])
+
+      # Read the specific batch from the VCF file
+      tbx <- TabixFile(vcf_path)
+      batch_data <- scanTabix(tbx, param = GRanges(chrom, IRanges(start = start_pos, end = end_pos)))
+
+      # Split each line of the batch data by tabs and create a matrix
+      data_matrix <- do.call(rbind, strsplit(batch_data[[1]], "\t"))
+      rm(batch_data)
+
+      # Create a data frame from the matrix, selecting the relevant columns
+      fix <- data.frame(
+        CHROM = data_matrix[, 1],
+        POS = as.numeric(data_matrix[, 2]),
+        ID = data_matrix[, 3],
+        REF = data_matrix[, 4],
+        ALT = data_matrix[, 5],
+        QUAL = data_matrix[, 6],
+        FILTER = data_matrix[, 7],
+        INFO = data_matrix[, 8],
+        stringsAsFactors = FALSE
+      )
+
+      # Remove SNP's that are not biallelic
+      biallelic_indices <- which(nchar(as.character(fix$ALT)) == 1)
+      fix <- fix[biallelic_indices, ]
+
+      # Assuming genotype data is in the 10th column onwards in VCF format
+      gt_matrix <- data_matrix[biallelic_indices, 10:ncol(data_matrix)]
+      rm(data_matrix)
+
+      # Detect separators for alleles (commonly '/' or '|')
+      allele_separators <- unique(gsub("[^/|]", "", gt_matrix))
+      separator <- allele_separators[1]  # Assuming consistent use of a single separator
+
+      # Escape the pipe character if it's the separator
+      if (separator == "|") {
+        separator <- "\\|"
+      }
+
+      # Estimate ploidy level from the genotype data
+      example_gt <- gt_matrix[1, 1]  # Using the first variant as an example
+      ploidy <- length(unlist(strsplit(example_gt, separator)))
+
+      # Separate alleles into different columns
+      sep_gt <- matrix(NA, nrow = nrow(gt_matrix), ncol = ploidy * ncol(gt_matrix))
+
+      for (i in seq_len(nrow(gt_matrix))) {
+        # Separate alleles for each variant and assign to the matrix
+        separated_gt <- strsplit(gt_matrix[i, ], separator)
+        sep_gt[i, ] <- unlist(lapply(separated_gt, function(x) ifelse(length(x) < ploidy, rep(NA, ploidy), x)))
+      }
+
+      # Assign column names (e.g., "Sample1_1", "Sample1_2" for diploid)
+      colnames(sep_gt) <- paste(rep(individual_names, each = ploidy),
+                                rep(1:ploidy, times = length(individual_names)),
+                                sep = "_")
+
+      # Apply the custom function to the batch data
+      process_result <- custom_function(index, fix, sep_gt, pop1_individuals, pop2_individuals)
+    }, error = function(e) {
+      # Return or log the error information
+      if (write_log) {
+        log_progress(paste0(Sys.time(), " Error in batch ", index, ": ", chrom, ":", start_pos, "-", end_pos," Error: ", e$message, "\n"), logfile)
+      }
+      return(NULL)  # Return NULL or some error indication
+    })
+
+    if (write_log) {
+      log_progress(paste0(Sys.time(), " Completed batch ", index, ": ", chrom, ":", start_pos, "-", end_pos, "\n"), logfile)
+    }
+
+    return(process_result)
+  }
+
+  # Stop the cluster
+  stopCluster(cl)
+
+  return(results)
+}
+
+#' Internal Window-Based Processing of VCF Data
+#'
+#' This function is designed for efficient internal processing of large VCF files
+#' based on specified window sizes and genomic skips. It reads the VCF file in windows,
+#' processes each window in parallel, and applies a custom function to the processed data.
+#' It's optimized for performance with large genomic datasets and is not intended
+#' to be used directly by end users.
+#'
+#' @param vcf_path The path to the VCF file.
+#' @param window_size The genomic length of each window in base pairs.
+#' @param skip_size The size of the genomic region to skip between windows in base pairs.
+#' @param custom_function A custom function that takes two arguments: a data frame similar to
+#'        the `@fix` slot of a `vcfR` object and a genotype matrix similar to the `@sep_gt` slot.
+#'        This function is applied to each window of data.
+#' @param threads The number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile The path to the log file.
+#'
+#' @details The function divides the VCF file into windows based on the specified `window_size`
+#'          and `skip_size`. Each window is processed to extract fixed information and genotype data,
+#'          filter for biallelic SNPs, and then apply the `custom_function`. The function uses parallel
+#'          processing to improve efficiency and can handle large genomic datasets.
+#'
+#'          This function is part of the internal workings of the package and is not intended
+#'          to be called directly by the user. It is documented for the sake of completeness
+#'          and to assist in maintenance and understanding of the package's internal mechanics.
+#'
+#' @return A list that is the combined result of applying the `custom_function` to each window.
+#'         The structure of this list depends on the `custom_function` used.
+#'
+#' @keywords internal
+#'
+#' @importFrom Rsamtools TabixFile scanTabix
+#' @importFrom GenomicRanges GRanges
+#' @importFrom foreach foreach %dopar%
+#' @importFrom doParallel registerDoParallel
+#' @importFrom parallel detectCores makeCluster stopCluster
+#'
+#' @noRd
+
+process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_function, threads = 1, write_log = FALSE, logfile = "logfile.txt", pop1_individuals = NULL, pop2_individuals = NULL) {
+  # Read the VCF header to extract chromosome information and individual names
+  con <- gzfile(vcf_path, "r")
+  on.exit(close(con))
+  chrom_info <- list()
+  individual_names <- NULL
+  while (TRUE) {
+    line <- readLines(con, n = 1)
+    if (startsWith(line, "##contig=<ID=")) {
+      chrom_id <- gsub(".*ID=([^,]+),.*", "\\1", line)
+      length <- as.numeric(gsub(".*length=([0-9]+).*", "\\1", line))
+      chrom_info[[chrom_id]] <- length
+    } else if (startsWith(line, "#CHROM")) {
+      line <- strsplit(line, "\t")
+      individual_names <- line[[1]][10:length(line[[1]])]
+      break
+    }
+  }
+  # Initialize variables for window coordinates
+  window_coordinates <- list()
+
+  # Generate window coordinates for each chromosome
+  for (chrom in names(chrom_info)) {
+    chrom_length <- chrom_info[[chrom]]
+    start_pos <- 1
+    while (start_pos < chrom_length) {
+      end_pos <- min(start_pos + window_size - 1, chrom_length)
+      window_coordinates <- c(window_coordinates, paste0(chrom, ":", start_pos, "-", end_pos))
+      start_pos <- start_pos + window_size + skip_size
+    }
+  }
+
+  # Set up parallel processing
+  if (is.null(threads)) {
+    num_cores <- detectCores() - 1  # Reserve one core for the system
+  } else {
+    num_cores <- threads
+  }
+  cl <- makeCluster(num_cores)
+  registerDoParallel(cl)
+
+  # Prepare log file if write_log is true
+  #Create log file and prepare progress tracking if write log is true
+  if (write_log) {
+    message(paste0("Preparing log file ", logfile))
+    # Function to safely write to a log file
+    log_progress <- function(message, log_file) {
+      # Obtain a lock on the file to avoid write conflicts
+      fileConn <- file(log_file, open = "a")
+      tryCatch({
+        # Write the progress message
+        writeLines(message, con = fileConn)
+      }, finally = {
+        # Release the file lock
+        close(fileConn)
+      })
+    }
+    file.create(logfile)
+  }
+
+  # Process each window in parallel
+  results <- foreach(window_coord = window_coordinates, .packages = c("Rsamtools", "GenomicRanges")) %dopar% {
+    tryCatch({
+      # Extract chromosome and positions from the batch coordinates
+      coords <- strsplit(window_coord, "[:-]")[[1]]
+      chrom <- coords[1]
+      start_pos <- as.numeric(coords[2])
+      end_pos <- as.numeric(coords[3])
+
+      # Read the specific batch from the VCF file
+      tbx <- TabixFile(vcf_path)
+      batch_data <- scanTabix(tbx, param = GRanges(chrom, IRanges(start = start_pos, end = end_pos)))
+
+      # Check if the window is empty
+      if (length(batch_data[[1]]) == 0) {
+        # Return an empty result or NULL, depending on how you want to handle it
+        process_result <- NULL
+      } else {
+
+        # Split each line of the batch data by tabs and create a matrix
+        data_matrix <- do.call(rbind, strsplit(batch_data[[1]], "\t"))
+        rm(batch_data)
+
+        # Create a data frame from the matrix, selecting the relevant columns
+        fix <- data.frame(
+          CHROM = data_matrix[, 1],
+          POS = as.numeric(data_matrix[, 2]),
+          ID = data_matrix[, 3],
+          REF = data_matrix[, 4],
+          ALT = data_matrix[, 5],
+          QUAL = data_matrix[, 6],
+          FILTER = data_matrix[, 7],
+          INFO = data_matrix[, 8],
+          stringsAsFactors = FALSE
+        )
+
+        # Remove SNP's that are not biallelic
+        biallelic_indices <- which(nchar(as.character(fix$ALT)) == 1)
+        fix <- fix[biallelic_indices, ]
+
+        # Assuming genotype data is in the 10th column onwards in VCF format
+        gt_matrix <- data_matrix[biallelic_indices, 10:ncol(data_matrix)]
+        rm(data_matrix)
+
+        # Detect separators for alleles (commonly '/' or '|')
+        allele_separators <- unique(gsub("[^/|]", "", gt_matrix))
+        separator <- allele_separators[1]  # Assuming consistent use of a single separator
+
+        # Escape the pipe character if it's the separator
+        if (separator == "|") {
+          separator <- "\\|"
+        }
+
+        # Estimate ploidy level from the genotype data
+        example_gt <- gt_matrix[1, 1]  # Using the first variant as an example
+        ploidy <- length(unlist(strsplit(example_gt, separator)))
+
+        # Separate alleles into different columns
+        sep_gt <- matrix(NA, nrow = nrow(gt_matrix), ncol = ploidy * ncol(gt_matrix))
+
+        for (i in seq_len(nrow(gt_matrix))) {
+          # Separate alleles for each variant and assign to the matrix
+          separated_gt <- strsplit(gt_matrix[i, ], separator)
+          sep_gt[i, ] <- unlist(lapply(separated_gt, function(x) ifelse(length(x) < ploidy, rep(NA, ploidy), x)))
+        }
+
+        # Assign column names (e.g., "Sample1_1", "Sample1_2" for diploid)
+        colnames(sep_gt) <- paste(rep(individual_names, each = ploidy),
+                                  rep(1:ploidy, times = length(individual_names)),
+                                  sep = "_")
+
+
+        # Apply the custom function to the batch data
+        process_result <- custom_function(fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals, pop2_individuals)
+
+      }
+    }, error = function(e) {
+      # Return or log the error information
+      if (write_log) {
+        log_progress(paste0(Sys.time(), " Error in window: ", window_coord, " Error: ", e$message, "\n"), logfile)
+      }
+      return(process_result <- NULL)  # Return NULL or some error indication
+    })
+
+    if (write_log) {
+      log_progress(paste0(Sys.time(), " Completed window: ", window_coord, "\n"), logfile)
+    }
+    return(process_result)
+  }
+
+  # Clean up and return results
+  stopCluster(cl)
+  return(results)
+}
+
+
+#' Separate Genotype Matrix by Populations
+#'
+#' This function separates a genotype matrix into two data frames based on population assignments.
+#' It's designed to work with the batches processed by `process_vcf_in_batches`.
+#'
+#' @param sep_gt A genotype matrix similar to the `@sep_gt` slot of a `vcfR` object.
+#' @param pop1_names A character vector of individual names for the first population.
+#' @param pop2_names A character vector of individual names for the second population.
+#' @param rm_ref_alleles Logical, whether variants that only have the reference allele
+#'        should be removed from the respective subpopulations data frame. (Default = TRUE)
+#'
+#' @return A list containing two data frames, one for each population.
+#'
+#' @examples
+#' sep_gt <- matrix(...) # Example genotype matrix
+#' pop1_names <- c("Individual1", "Individual2", ...)
+#' pop2_names <- c("Individual5", "Individual6", ...)
+#'
+#' separated_data <- separateByPopulations(sep_gt, pop1_names, pop2_names)
+#'
+#' @keywords internal
+#'
+#' @noRd
+
+separateByPopulations <- function(sep_gt, pop1_names, pop2_names, ploidy = 2, rm_ref_alleles = TRUE) {
+  # Check if all provided names are in the column names of sep_gt
+  all_names <- c(pop1_names, pop2_names)
+
+  colnames1 <- paste(rep(pop1_names, each = ploidy),
+                     rep(1:ploidy, times = length(pop1_names)),
+                     sep = "_")
+  colnames2 <- paste(rep(pop2_names, each = ploidy),
+                     rep(1:ploidy, times = length(pop2_names)),
+                     sep = "_")
+
+
+  # Create data frames for each population
+  pop1_gt <- sep_gt[, colnames1, drop = FALSE]
+  pop2_gt <- sep_gt[, colnames2, drop = FALSE]
+
+  if (rm_ref_alleles) {
+    non_ref_rows1 <- apply(pop1_gt, 1, function(x) !all(x %in% c("0", ".")))
+    pop1_gt <- pop1_gt[non_ref_rows1, , drop = FALSE]
+    non_ref_rows2 <- apply(pop2_gt, 1, function(x) !all(x %in% c("0", ".")))
+    pop2_gt <- pop2_gt[non_ref_rows2, , drop = FALSE]
+  }
+
+  return(list(pop1 = pop1_gt, pop2 = pop2_gt))
+}
+
+
+#' Calculate Allele Frequencies from Genotype Matrix
+#'
+#' This function calculates allele frequencies from a genotype matrix (sep_gt) for each variant.
+#' It is designed to be used within the batch processing framework of `process_vcf_in_batches`.
+#'
+#' @param sep_gt Genotype matrix similar to the `@sep_gt` slot of a `vcfR` object.
+#'
+#' @return A data frame containing allele frequencies for each variant.
+#'
+#' @examples
+#' sep_gt <- ... # Obtain this from a batch processed by `process_vcf_in_batches`
+#' allele_freqs <- calculateAlleleFreqs(sep_gt)
+#'
+#' @keywords internal
+#'
+#' @noRd
+
+calculateAlleleFreqs <- function(sep_gt) {
+  allele_frequencies_per_site <- vector("list", length = nrow(sep_gt))
+  unique_alleles <- unique(as.vector(sep_gt))
+
+  # Calculate allele frequencies for each variant
+  for (i in seq_len(nrow(sep_gt))) {
+    alleles <- sep_gt[i, ]
+    # Removing missing genotypes from the calculation all over
     alleles <- alleles[alleles != "."]
     allele_counts <- table(factor(alleles, levels = unique_alleles))
     allele_frequencies <- allele_counts / sum(allele_counts)
     allele_frequencies_per_site[[i]] <- allele_frequencies
   }
+
+  # Combine the frequencies into a data frame
   allele_frequencies_df <- do.call(rbind, allele_frequencies_per_site)
+  colnames(allele_frequencies_df) <- unique_alleles
 
-  object@allele_freqs <- allele_frequencies_df
-
-  return(object)
-
+  return(allele_frequencies_df)
 }
-
-#' calculateWindowedMetric
-#'
-#' Calculate one of the population genomics metrics of this package on a per window basis over a longer sequence or even whole chromsomes and genomes. Calculations are done in parallel.
-#'
-#' @param object An S4 object of type GPvcfR.
-#' @param metricFunction One of the population genomics metrics functions included in this package.
-#' @param window_size The size of the window for which Pi is calculated. (Default = 1000)
-#' @param step_size The size of the step in between windows. (Default = 0)
-#' @param threads Number of threads used for the computation. Default is one less then available on the system.
-#' @param min_var Minimum number of variants that must be present in a window to calculate the metric. Default is set to 2, because many metrics break if there is only one or none variant to work with.
-#' @param pop_assignments If the metric is calculated from two populations (f.e. Fst, private alleles, etc.) then on has to provide a named vector. Elements are the population names and names are the individual name.
-#' @param write_log Logical, whether a log file of the process should be written to disk. This is adviced for analysing large data sets.
-#' @param logfile Name of the log file, if write_log is true.
-#'
-#' @return A data frame with one column for the window chromosome, the window start and end position, the number of variants in the window, and the value(s) of the metric.
-#'
-#' @examples
-#' data("mys", package = "GenoPop")
-#' calculateWindowedMetric(mys, Pi, window_size = 10000)
-#'
-#' @export
-
-calculateWindowedMetric <- function(object, metricFunction, window_size = 1000, step_size = 0, threads = NULL, min_var = 2, pop_assignments = NULL, write_log = FALSE, logfile = "logfile.txt") {
-
-  # Convert the function name to a string for comparison
-  metricFunctionName <- deparse(substitute(metricFunction))
-
-  if (metricFunctionName %in% c("Fst", "PrivateAlleles") & is.null(pop_assignments)) {
-    stop("Please provide a named vector with population assignments of each individual in the data set for this metric.")
-  }
-
-  # Extract the positions and the chromosomes
-  variant_positions <- as.numeric(object@fix[, 2])  # Assuming the second column contains positions
-  chromosomes <- object@fix[, 1]  # Assuming the first column contains chromosome names
-
-  # Prepare a list to hold results
-  results <- list()
-
-  # We will calculate the metric for each chromosome separately
-  unique_chromosomes <- unique(chromosomes)
-  for (chr in unique_chromosomes) {
-    # Get indices of the variants on this chromosome
-    chr_indices <- which(chromosomes == chr)
-    chr_positions <- variant_positions[chr_indices]
-
-    # Calculate the number of windows based on the step size and the positions of the variants
-    num_windows <- ceiling((max(chr_positions) - min(chr_positions)) / (step_size + window_size))
-
-    # Determine the number of cores
-    if (is.null(threads)){
-      num_cores <- min(detectCores() - 1, num_windows) # Reserve one core for the system
-    } else {
-      num_cores <- min(threads, num_windows)
-    }
-
-    # Prepare a list of arguments for each task
-    tasks <- lapply(seq_len(num_windows), function(i) {
-      start_pos <- (i - 1) * (window_size + step_size)
-      end_pos <- start_pos + window_size
-
-      # Get indices of variants within this window
-      window_indices <- which(chr_positions >= start_pos & chr_positions <= end_pos)
-      calculate <- TRUE
-      imp <- FALSE
-      # If there are less then the minimum number of variants in the window, don't calculate the metric.
-      if (length(window_indices) < min_var) {
-        calculate <- FALSE
-      }
-      if (!is.null(object@imp_gt) && nrow(object@imp_gt) != 0) {
-        imp <- TRUE
-      }
-      # Data to be processed by the task
-      list(
-        calculate = calculate,
-        imp = imp,
-        object = object,
-        chr_indices = chr_indices,
-        window_indices = window_indices,
-        metricFunction = metricFunction,
-        metricFunctionName = metricFunctionName,
-        window_size = window_size,
-        start = start_pos,
-        end = end_pos,
-        pa = pop_assignments,
-        id = i
-      )
-    })
-
-    # Prepare the metric function to be exported.
-    args_list <- list(metricFunction = metricFunction)
-
-    # Set up the parallel backend
-    cl <- makeCluster(num_cores)
-    registerDoParallel(cl)
-
-    #Create log file and prepare progress tracking if write log is true
-    if (write_log) {
-      message(paste0("Preparing log file ", logfile))
-      # Function to safely write to a log file
-      log_progress <- function(message, log_file) {
-        # Obtain a lock on the file to avoid write conflicts
-        fileConn <- file(log_file, open = "a")
-        tryCatch({
-          # Write the progress message
-          writeLines(message, con = fileConn)
-        }, finally = {
-          # Release the file lock
-          close(fileConn)
-        })
-      }
-      file.create(logfile)
-    }
-
-    # Perform the calculations in parallel
-    window_results <- foreach(task = tasks, .packages = c("GenoPop")) %dopar% {
-      if (!task$calculate) {
-        if (task$metricFunctionName %in% c("PrivateAlleles")) {
-          return(list(chromosome = chr, window_start = start, window_end = end, num_variants = length(task$window_indices), metric1 = NA, metric2 = NA))
-        } else {
-          return(list(chromosome = chr, window_start = start, window_end = end, num_variants = length(task$window_indices), metric = NA))
-        }
-      } else {
-        # Create a 'window' object that contains only the data for this specific window
-        window_object <- task$object
-        # Now, adjust the data in window_object to reflect only the current window
-        window_object@fix <- task$object@fix[task$chr_indices[task$window_indices], ]
-        window_object@allele_freqs <- task$object@allele_freqs[task$chr_indices[task$window_indices], ]
-        window_object@gt <- task$object@gt[task$chr_indices[task$window_indices], ]
-        window_object@sep_gt <- task$object@sep_gt[task$chr_indices[task$window_indices], ]
-        if (task$imp){
-          window_object@imp_gt <- task$object@imp_gt[task$chr_indices[task$window_indices], ]
-        }
-        start <- task$start
-        end <- task$end
-        current_metricFunction <- args_list$metricFunction
-        # Calculate the metric
-        if (task$metricFunctionName %in% c("Pi", "TajimasD")) {
-          metric_value <- current_metricFunction(window_object, task$window_size)  # Also hand over the window size as sequence length
-        } else if (task$metricFunctionName %in% c("Fst", "PrivateAlleles")) {
-          metric_value <- current_metricFunction(window_object, task$pa)
-        } else if (task$metricFunctionName %in% c("Dxy")) {
-          metric_value <- current_metricFunction(window_object, task$pa, task$window_size)
-        }else {
-          metric_value <- current_metricFunction(window_object)
-        }
-
-        if (write_log) {
-          log_progress(paste0(Sys.time(), " Completed task ", task$id, " of ", num_windows, "."), logfile)
-        }
-
-        if (task$metricFunctionName %in% c("PrivateAlleles")) {
-          return(list(chromosome = chr, window_start = start, window_end = end, num_variants = length(task$window_indices), metric1 = metric_value[1], metric2 = metric_value[2]))
-        } else {
-          return(list(chromosome = chr, window_start = start, window_end = end, num_variants = length(task$window_indices), metric = metric_value))
-        }
-      }
-    }
-
-    # Stop the cluster
-    stopCluster(cl)
-    #print(lapply(window_results, length))
-    # Convert the list of lists into a data frame
-    window_results_df <- do.call(rbind, lapply(window_results, as.data.frame))
-    # Each chromosome's results are added to the main 'results' list
-    results[[chr]] <- window_results_df
-  }
-
-  # Combine all results into a single data frame. This assumes all data frames have the same column structure.
-  consolidated_results <- do.call(rbind, results)
-  rownames(consolidated_results) <- 1:nrow(consolidated_results)
-  if (metricFunctionName %in% c("PrivateAlleles")) {
-    colnames(consolidated_results) <- c("chromosome", "window_start", "window_end", "num_variants", paste0(metricFunctionName,"_pop1"), paste0(metricFunctionName,"_pop2"))
-  } else {
-    colnames(consolidated_results) <- c("chromosome", "window_start", "window_end", "num_variants", metricFunctionName)
-  }
-  return(consolidated_results)
-}
-
-
-#' writeVCF
-#'
-#' Writes a new VCF file to disk using the imputed or separated genotypes from a GPvcfR object.
-#'
-#' @param object A GPvcfR object containing the VCF data.
-#' @param file_path Path to the output VCF file.
-#' @param use_imputed Logical, indicating whether to use the imputed genotypes if available. If FALSE or imputed genotypes are not available, separated genotypes will be used.
-#' @param bgzip Logical, indicating whether to bgzip the output file (requires tabix to be installed).
-#'
-#' @return Invisible NULL. The function is called for its side effect of writing a file.
-#'
-#' @examples
-#' data("mys", package = "GenoPop")
-#' writeVcf(mys, "output.vcf", use_imputed = TRUE)
-#'
-#' @export
-
-writeVCF <- function(object, file_path, use_imputed = TRUE, bgzip = FALSE) {
-  # Check for necessary components in the object
-  if (!all(c("sep_gt", "meta", "fix", "ploidy") %in% slotNames(object))) {
-    stop("The object does not have the necessary components.")
-  }
-
-  # Decide which genotype matrix to use
-  genotype_matrix <- if (use_imputed && !is.null(object@imp_gt) && nrow(object@imp_gt) != 0) {
-    object@imp_gt
-  } else {
-    object@sep_gt
-  }
-
-  # Determine the file connection based on bgzip parameter
-  if (bgzip) {
-    # Check if bgzip is available
-    if (system("which bgzip", ignore.stdout = TRUE, ignore.stderr = TRUE) != 0) {
-      stop("bgzip not available. Please install tabix or set bgzip=FALSE.")
-    }
-  }
-
-  # Open a connection to the file
-  file_conn <- file(file_path, "w")
-
-  # Write the header information from object meta data
-  header_lines <- object@meta
-  writeLines(header_lines, file_conn)
-
-  # Write the column names (VCF format requires these specific column names)
-  # Assuming the fix matrix has the individual names in the columns after the fixed information
-  column_names <- c("#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO", colnames(object@gt))
-  writeLines(paste(column_names, collapse = "\t"), file_conn)
-
-  # Write the data rows
-  for (i in seq_len(nrow(genotype_matrix))) {
-    # Extract the fixed info for the row
-    fixed_info <- paste(object@fix[i, ], collapse = "\t")
-    # Combine genotypes into the VCF genotype format
-    genotypes <- apply(matrix(genotype_matrix[i, ], ncol = object@ploidy, byrow = TRUE), 1, function(g) {
-      paste(g, collapse = "|")
-    })
-
-    # Construct a line of VCF data
-    vcf_line <- paste(fixed_info, "GT",
-                      paste(genotypes, collapse = "\t"),
-                      sep = "\t")
-
-    # Write the line to the file
-    writeLines(vcf_line, file_conn)
-  }
-
-  # Close the file connection
-  close(file_conn)
-
-  # Compress and index the file with tabix if bgzip is TRUE
-  if (bgzip) {
-    system(paste("bgzip", file_path))
-    system(paste0("tabix ", file_path, ".gz"))
-  }
-
-  invisible(NULL)
-}
-

@@ -5,29 +5,30 @@
 \title{rfImputation}
 \usage{
 rfImputation(
-  sep_gt,
+  vcf_path,
+  output_vcf,
+  batch_size = 1000,
   maxiter = 10,
   ntree = 100,
-  chunk_size = 1000,
-  threads = NULL,
+  threads = 1,
   write_log = FALSE,
-  logfile = "logfile.txt"
+  logfile = "log.txt"
 )
 }
 \arguments{
-\item{sep_gt}{A separated genotype matrix from a myvcfR object.}
-
 \item{maxiter}{The number of improvement iterations the random forest algorithm (missForest) runs.}
 
 \item{ntree}{The number of decision trees in the random forest.}
-
-\item{chunk_size}{Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.}
 
 \item{threads}{Number of threads used for the computation. Default is one less then available on the system.}
 
 \item{write_log}{Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.}
 
 \item{logfile}{Name of the log file, if write_log is true.}
+
+\item{sep_gt}{A separated genotype matrix from a myvcfR object.}
+
+\item{chunk_size}{Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.}
 }
 \value{
 A separated genotype matrix from a myvcfR object, but with imputed missing values.

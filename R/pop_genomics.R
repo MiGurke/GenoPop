@@ -1,222 +1,360 @@
-#' FixedSites
+### ADD WINDOW MODE TO EACH OF THEM ###
+
+#' Count Fixed Sites for Alternative Allele in VCF File
 #'
-#' Count the number of sites fixed for the alternative allele ("1").
+#' This function counts the number of sites fixed for the alternative allele ("1") in a VCF file.
+#' It processes the file in two modes: the entire file at once or in specified windows across the genome.
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach but tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
-#' @param object An S4 object of type GPvcfR. Allele frequencies must be present.
+#' @param vcf_path Path to the VCF file.
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (used in batch mode only, default of 10,000 should be suitable for most use cases).
+#' @param window_size Size of the window for windowed analysis in base pairs (optional).
+#'                   When specified, `skip_size` must also be provided.
+#' @param skip_size Number of base pairs to skip between windows (optional).
+#'                  Used in conjunction with `window_size` for windowed analysis.
 #'
-#' @return The number of fixed sites.
+#' @return
+#' In batch mode (no window_size or skip_size provided): A single integer representing the total number of fixed sites for the alternative allele across the entire VCF file.
+#' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'FixedSites', representing the count of fixed sites within each window.
+#'
+#' @details
+#' The function has two modes of operation:
+#' 1. Batch Mode: Processes the entire VCF file in batches to count the total number of fixed sites for the alternative allele. Suitable for a general overview of the entire dataset.
+#' 2. Window Mode: Processes the VCF file in windows of a specified size and skip distance. This mode is useful for identifying regions with high numbers of fixed sites, which could indicate selective sweeps or regions of low recombination.
 #'
 #' @examples
-#' data("real", package = "GenoPop")
-#' vcf <- calculateAlleleFreqs(real, missing_data = "impute", method = "mean")
-#' FixedSites(vcf)
+#' # Batch mode example
+#' vcf_path <- "path/to/vcf/file"
+#' num_fixed_sites <- FixedSites(vcf_path, threads = 4, write_log = TRUE, logfile = "fixed_sites_log.txt")
+#'
+#' # Window mode example
+#' vcf_path <- "path/to/vcf/file"
+#' fixed_sites_df <- FixedSites(vcf_path, threads = 4, write_log = TRUE, logfile = "windowed_fixed_sites_log.txt", window_size = 100000, skip_size = 50000)
 #'
 #' @export
 
-FixedSites <- function(object) {
-  # Extract the allele frequency table from the object
-  allele_freq_table <- object@allele_freqs
 
-  # Check if 'allele_freqs' slot in the object has data
-  if (is.null(allele_freq_table) || nrow(allele_freq_table) == 0) {
-    stop("No allele frequency data available in the object.")
-  }
-
-  # The number of fixed sites (excluding those fixed for the reference allele)
-  num_fixed_sites <- 0
-  # Check each site
-  for (i in 1:nrow(allele_freq_table)) {
-    site_freqs <- allele_freq_table[i, ]
-    # Identify if there's an allele (excluding the reference allele '0') with frequency equal to 1
-    if (any(site_freqs[-1] == 1)) {  # -1 to exclude the first column which represents the reference allele
-      num_fixed_sites <- num_fixed_sites + 1
+FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL) {
+  if (is.null(window_size) | is.null(skip_size)) {
+    # Validate inputs for batch mode
+    if (!is.null(window_size) || !is.null(skip_size)) {
+      stop("Both 'window_size' and 'skip_size' must be provided for window mode.")
     }
-  }
-  return(num_fixed_sites)
-}
 
-#' PolymorphicSites
-#'
-#' Count the number of polymorphic sites in the data set (aka. sites not fixed for the alternative allele).
-#'
-#' @param object An S4 object of type GPvcfR. Allele frequencies must be present.
-#'
-#' @return The number of polymorphic sites.
-#'
-#' @examples
-#' data("real", package = "GenoPop")
-#' vcf <- calculateAlleleFreqs(real, missing_data = "impute", method = "mean")
-#' PolymorphicSites(vcf)
-#'
-#' @export
-
-PolymorphicSites <- function(object) {
-  # Extract the allele frequency table from the object
-  allele_freq_table <- object@allele_freqs
-
-  # Check if 'allele_freqs' slot in the object has data
-  if (is.null(allele_freq_table) || nrow(allele_freq_table) == 0) {
-    stop("No allele frequency data available in the object.")
-  }
-
-  # The number of polymorphic sites
-  num_polymorphic_sites <- 0
-
-  # Check each site
-  for (i in 1:nrow(allele_freq_table)) {
-    site_freqs <- allele_freq_table[i, ]
-
-    # Check if there's more than one allele present at the site
-    # i.e., no allele has frequency 1 or 0 (excluding sites fixed for the reference allele)
-    if (!any(site_freqs == 1) && !all(site_freqs == 0)) {
-      num_polymorphic_sites <- num_polymorphic_sites + 1
-    }
-  }
-
-  return(num_polymorphic_sites)
-}
-
-#' SegregatingSites
-#'
-#' Count the number of segregating sites in the data set.
-#'
-#' @param object An S4 object of type GPvcfR. Allele frequencies must be present.
-#'
-#' @return The number of segregating sites.
-#'
-#' @examples
-#' data("real", package = "GenoPop")
-#' vcf <- calculateAlleleFreqs(real, missing_data = "impute", method = "mean")
-#' SegregatingSites(vcf)
-#'
-#' @export
-
-SegregatingSites <- function(object) {
-  # Extract the allele frequency table from the object
-  allele_freq_table <- object@allele_freqs
-
-  # Check if 'allele_freqs' slot in the object has data
-  if (is.null(allele_freq_table) || nrow(allele_freq_table) == 0) {
-    stop("No allele frequency data available in the object.")
-  }
-
-  # The number of segregating sites
-  num_segregating_sites <- 0
-
-  # Check each site
-  for (i in 1:nrow(allele_freq_table)) {
-    site_freqs <- allele_freq_table[i, ]
-
-    # Check if there's more than one allele present at the site
-    # i.e., no allele has frequency 1 or 0 (excluding sites fixed for the reference allele)
-    if (!any(site_freqs == 1) && !all(site_freqs == 0)) {
-      num_segregating_sites <- num_segregating_sites + 1
-    }
-  }
-
-  return(num_segregating_sites)
-}
-
-#' SingeltonSites
-#'
-#' Count the number of singelton sites in the data set. These are sites where a minor allele occurs only once in the sample.
-#'
-#' @param object An S4 object of type GPvcfR. Allele frequencies must be present.
-#'
-#' @return The number of singelton sites.
-#'
-#' @examples
-#' data("real", package = "GenoPop")
-#' vcf <- calculateAlleleFreqs(real, missing_data = "impute", method = "mean")
-#' SingeltonSites(vcf)
-#'
-#' @export
-
-SingeltonSites <- function(object) {
-  # Extract the genotype matrix, if there is an imputed version use that.
-  sep <- object@sep_gt
-  imp <- object@imp_gt
-  if (is.null(imp) || nrow(imp) == 0) {
-    genotype_matrix <- sep
+    # Use process_vcf_in_batches to process the file
+    batch_results <- process_vcf_in_batches(vcf_path,
+                                            batch_size = batch_size,
+                                            threads = threads,
+                                            write_log = write_log,
+                                            logfile = logfile,
+                                            custom_function = function(index, fix, sep_gt,pop1_individuals = NULL, pop2_individuals = NULL) {
+                                              allele_freqs <- calculateAlleleFreqs(sep_gt)
+                                              # Count fixed sites for the alternative allele in this batch
+                                              return(sum(apply(allele_freqs, 1, function(x) any(x[2] == 1))))  # -1 to exclude the reference allele
+                                            })
+    # Sum up the counts from all batches
+    total_fixed_sites <- sum(do.call("rbind", batch_results))
+    return(total_fixed_sites)
   } else {
-    genotype_matrix <- imp
+    # Use process_vcf_in_batches to process the file
+    window_results <- process_vcf_in_windows(vcf_path,
+                                            window_size = window_size,
+                                            skip_size = skip_size,
+                                            threads = threads,
+                                            write_log = write_log,
+                                            logfile = logfile,
+                                            custom_function = function(fix, sep_gt, chrom, start_pos, end_pos,pop1_individuals = NULL, pop2_individuals = NULL) {
+                                              allele_freqs <- calculateAlleleFreqs(sep_gt)
+                                              # Count fixed sites for the alternative allele in this batch
+                                              return(c(chrom, start_pos, end_pos, sum(apply(allele_freqs, 1, function(x) any(x[2] == 1)))))
+                                            })
+    # Bind results per window into a data frame
+    fixed_sites_df <- as.data.frame(do.call("rbind", window_results))
+    colnames(fixed_sites_df) <- c("Chromosome", "Start", "End", "FixedSites")
+    return(fixed_sites_df)
   }
-
-  # Check if we actually found some genotype data.
-  if (is.null(genotype_matrix) || nrow(genotype_matrix) == 0) {
-    stop("No genotype data available in the object.")
-  }
-
-  # The number of singleton sites
-  num_singleton_sites <- 0
-
-  # Check each site
-  for (i in 1:nrow(genotype_matrix)) {
-    site_genotypes <- genotype_matrix[i, ]
-
-    # Calculate the allele counts at this site
-    allele_counts <- table(site_genotypes)
-    # A site is considered to have a singleton if any allele (except the reference allele, assumed to be '0')
-    # is present exactly once in the entire sample, considering the ploidy level.
-    singleton_condition <- (allele_counts == 1) & (names(allele_counts) != "0")  # excluding the reference allele
-
-    if (any(singleton_condition)) {
-      num_singleton_sites <- num_singleton_sites + 1
-    }
-  }
-
-  return(num_singleton_sites)
 }
 
 
-#' PrivateAlleles
+#' Count Segregating Sites in VCF File
 #'
-#' Function to calculate the number of private alleles in  two populations.
+#' This function counts the number of polymorphic sites (sites not fixed for the alternative allele)
+#' in a VCF file. It processes the file in batches or specified windows across the genome.
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows.
 #'
-#' @param object A GPvcfR object.
-#' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
+#' @param vcf_path Path to the VCF file.
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (used in batch mode only, default of 10,000 should be suitable for most use cases).
+#' @param window_size Size of the window for windowed analysis in base pairs (optional).
+#'                   When specified, `skip_size` must also be provided.
+#' @param skip_size Number of base pairs to skip between windows (optional).
+#'                  Used in conjunction with `window_size` for windowed analysis.
 #'
-#' @return A list containing the number of private alleles for each population.
+#' @return
+#' In batch mode (no window_size or skip_size provided): A single integer representing the total number of polymorphic sites across the entire VCF file.
+#' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'PolymorphicSites', representing the count of polymorphic sites within each window.
 #'
 #' @examples
-#' mys1 <- c("8449", "8128", "8779")
-#' mys2 <- c("8816", "8823", "8157")
+#' # Batch mode example
+#' vcf_path <- "path/to/vcf/file"
+#' num_polymorphic_sites <- SegregatingSites(vcf_path, threads = 4, write_log = TRUE, logfile = "polymorphic_sites_log.txt")
 #'
-#' individuals <- c(mys1, mys2)
-#' pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
-#' pop_assignments <- setNames(pop_names, individuals)
-#'
-#' data("mys", package = "GenoPop")
-#' PrivateAlleles(mys, pop_assignments)
+#' # Window mode example
+#' vcf_path <- "path/to/vcf/file"
+#' polymorphic_sites_df <- SegregatingSites(vcf_path, threads = 4, write_log = TRUE, logfile = "windowed_polymorphic_sites_log.txt", window_size = 100000, skip_size = 50000)
 #'
 #' @export
 
-PrivateAlleles <- function(object, pop_assignments) {
+SegregatingSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL) {
+  if (is.null(window_size) || is.null(skip_size)) {
+    # Validate inputs for batch mode
+    if (!is.null(window_size) || !is.null(skip_size)) {
+      stop("Both 'window_size' and 'skip_size' must be provided for window mode.")
+    }
 
-  # Use the pop_assignments vector to separate the populations
-  separated_pops <- separateByPopulations(object, pop_assignments, rm_ref_alleles = TRUE)
-  pop1 <- separated_pops[[1]]
-  pop2 <- separated_pops[[2]]
+    # Batch mode processing
+    batch_results <- process_vcf_in_batches(vcf_path,
+                                            batch_size = batch_size,
+                                            threads = threads,
+                                            write_log = write_log,
+                                            logfile = logfile,
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
+                                              allele_freqs <- calculateAlleleFreqs(sep_gt)
+                                              # Count polymorphic sites in this batch
+                                              return(sum(apply(allele_freqs, 1, function(x) !any(x == 1) && !all(x == 0))))
+                                            })
 
-  # Extract and store positions and chromosomes for both populations
-  positions_pop1 <- pop1@fix[,2]  # assuming the 2nd column is 'POS'
-  chromosomes_pop1 <- pop1@fix[,1]  # assuming the 1st column is 'CHROM'
-  positions_pop2 <- pop2@fix[,2]  # assuming the 2nd column is 'POS'
-  chromosomes_pop2 <- pop2@fix[,1]  # assuming the 1st column is 'CHROM'
+    # Sum up the counts from all batches
+    total_polymorphic_sites <- sum(do.call("rbind", batch_results))
+    return(total_polymorphic_sites)
+  } else {
+    # Window mode processing
+    window_results <- process_vcf_in_windows(vcf_path,
+                                             window_size = window_size,
+                                             skip_size = skip_size,
+                                             threads = threads,
+                                             write_log = write_log,
+                                             logfile = logfile,
+                                             custom_function = function(fix, sep_gt, chrom, start_pos, end_pos,pop1_individuals = NULL, pop2_individuals = NULL) {
+                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
+                                               # Count polymorphic sites in this window
+                                               return(c(chrom, start_pos, end_pos, sum(apply(allele_freqs, 1, function(x) !any(x == 1) && !all(x == 0)))))
+                                             })
 
-  # Combine chromosomes and positions into a unique site identifier for both populations
-  sites_pop1 <- paste(chromosomes_pop1, positions_pop1, sep=":")
-  sites_pop2 <- paste(chromosomes_pop2, positions_pop2, sep=":")
-
-  # Identify private alleles by finding unique sites in each population
-  private_sites_pop1 <- setdiff(sites_pop1, sites_pop2)
-  private_sites_pop2 <- setdiff(sites_pop2, sites_pop1)
-
-  # Return the count of private alleles as a named vector
-  private_alleles_count <- c(pop1 = length(private_sites_pop1), pop2 = length(private_sites_pop2))
-  return(private_alleles_count)
+    # Bind results per window into a data frame
+    polymorphic_sites_df <- as.data.frame(do.call("rbind", window_results))
+    colnames(polymorphic_sites_df) <- c("Chromosome", "Start", "End", "PolymorphicSites")
+    return(polymorphic_sites_df)
+  }
 }
 
+
+#' Count Singleton Sites in VCF File
+#'
+#' This function counts the number of singleton sites (sites where a minor allele occurs only once in the sample)
+#' in a VCF file. It processes the file in batches or specified windows across the genome.
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows.
+#'
+#' @param vcf_path Path to the VCF file.
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (used in batch mode only, default of 10,000 should be suitable for most use cases).
+#' @param window_size Size of the window for windowed analysis in base pairs (optional).
+#'                   When specified, `skip_size` must also be provided.
+#' @param skip_size Number of base pairs to skip between windows (optional).
+#'                  Used in conjunction with `window_size` for windowed analysis.
+#'
+#' @return
+#' In batch mode (no window_size or skip_size provided): A single integer representing the total number of singleton sites across the entire VCF file.
+#' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'SingletonSites', representing the count of singleton sites within each window.
+#'
+#' @examples
+#' # Batch mode example
+#' vcf_path <- "path/to/vcf/file"
+#' num_singleton_sites <- SingletonSites(vcf_path, threads = 4, write_log = TRUE, logfile = "singleton_sites_log.txt")
+#'
+#' # Window mode example
+#' vcf_path <- "path/to/vcf/file"
+#' singleton_sites_df <- SingletonSites(vcf_path, threads = 4, write_log = TRUE, logfile = "windowed_singleton_sites_log.txt", window_size = 100000, skip_size = 50000)
+#'
+#' @export
+
+SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL) {
+  if (is.null(window_size) || is.null(skip_size)) {
+    # Validate inputs for batch mode
+    if (!is.null(window_size) || !is.null(skip_size)) {
+      stop("Both 'window_size' and 'skip_size' must be provided for window mode.")
+    }
+
+    # Batch mode processing
+    batch_results <- process_vcf_in_batches(vcf_path,
+                                            batch_size = batch_size,
+                                            threads = threads,
+                                            write_log = write_log,
+                                            logfile = logfile,
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
+                                              allele_freqs <- calculateAlleleFreqs(sep_gt)
+                                              # Count singleton sites in this batch
+                                              return(sum(apply(allele_freqs, 1, function(x) any((x == 1/length(x)) & (names(x) != "0")))))
+                                            })
+
+    # Sum up the counts from all batches
+    total_singleton_sites <- sum(do.call("rbind", batch_results))
+    return(total_singleton_sites)
+  } else {
+    # Window mode processing
+    window_results <- process_vcf_in_windows(vcf_path,
+                                             window_size = window_size,
+                                             skip_size = skip_size,
+                                             threads = threads,
+                                             write_log = write_log,
+                                             logfile = logfile,
+                                             custom_function = function(fix, sep_gt, chrom, start_pos, end_pos,pop1_individuals = NULL, pop2_individuals = NULL) {
+                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
+                                               # Count singleton sites in this window
+                                               return(c(chrom, start_pos, end_pos, sum(apply(allele_freqs, 1, function(x) any((x == 1/length(x)) & (names(x) != "0"))))))
+                                             })
+
+    # Bind results per window into a data frame
+    singleton_sites_df <- as.data.frame(do.call("rbind", window_results))
+    colnames(singleton_sites_df) <- c("Chromosome", "Start", "End", "SingletonSites")
+    return(singleton_sites_df)
+  }
+}
+
+
+#' Count Private Alleles in VCF File
+#'
+#' This function calculates the number of private alleles in two populations from a VCF file.
+#' It processes the file in batches or specified windows across the genome.
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows.
+#'
+#' @param vcf_path Path to the VCF file.
+#' @param pop1_individuals Vector of individual names belonging to the first population.
+#' @param pop2_individuals Vector of individual names belonging to the second population.
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (used in batch mode only, default of 10,000 should be suitable for most use cases).
+#' @param window_size Size of the window for windowed analysis in base pairs (optional).
+#'                   When specified, `skip_size` must also be provided.
+#' @param skip_size Number of base pairs to skip between windows (optional).
+#'                  Used in conjunction with `window_size` for windowed analysis.
+#'
+#' @return
+#' In batch mode (no window_size or skip_size provided): A list containing the number of private alleles for each population.
+#' In window mode (window_size and skip_size provided): A list of data frames, each with columns 'Chromosome', 'Start', 'End', 'PrivateAllelesPop1', and 'PrivateAllelesPop2', representing the count of private alleles within each window for each population.
+#'
+#' @examples
+#' # Batch mode example
+#' vcf_path <- "path/to/vcf/file"
+#' pop1_individuals <- c("8449", "8128", "8779")
+#' pop2_individuals <- c("8816", "8823", "8157")
+#' private_alleles <- PrivateAlleles(vcf_path, pop1_individuals, pop2_individuals, threads = 4, write_log = TRUE, logfile = "private_alleles_log.txt")
+#'
+#' # Window mode example
+#' private_alleles_windows <- PrivateAlleles(vcf_path, pop1_individuals, pop2_individuals, threads = 4, write_log = TRUE, logfile = "windowed_private_alleles_log.txt", window_size = 100000, skip_size = 50000)
+#'
+#' @export
+
+PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL) {
+
+  if (is.null(window_size) || is.null(skip_size)) {
+    # Validate inputs for batch mode
+    if (!is.null(window_size) || !is.null(skip_size)) {
+      stop("Both 'window_size' and 'skip_size' must be provided for window mode.")
+    }
+    # Batch mode processing
+    batch_results <- process_vcf_in_batches(vcf_path,
+                                            batch_size = batch_size,
+                                            threads = threads,
+                                            write_log = write_log,
+                                            logfile = logfile,
+                                            pop1_individuals = pop1_individuals,
+                                            pop2_individuals = pop2_individuals,
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals, pop2_individuals) {
+                                              # Separate populations
+                                              sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
+                                              sep_pop1 <- sep$pop1
+                                              sep_pop2 <- sep$pop2
+
+                                              # Calculate allele frequencies for each population
+                                              allele_freqs_pop1 <- calculateAlleleFreqs(sep_pop1)
+                                              allele_freqs_pop2 <- calculateAlleleFreqs(sep_pop2)
+
+                                              private_alleles_pop1 <- 0
+                                              private_alleles_pop2 <- 0
+                                              # Identify private alleles
+                                              for (i in 1:nrow(allele_freqs_pop1)) {
+                                                if (allele_freqs_pop1[i,1] == 1 & allele_freqs_pop2[2] > 0){
+                                                  private_alleles_pop2 <- private_alleles_pop2 + 1
+                                                }
+                                                if (allele_freqs_pop2[1] == 1 & allele_freqs_pop1[2] > 0){
+                                                  private_alleles_pop1 <- private_alleles_pop1 + 1
+                                                }
+                                              }
+                                              return(c(private_alleles_pop1, private_alleles_pop2))
+                                            })
+
+    # Combine the counts from all batches
+    private_alleles <- do.call("rbind", batch_results)
+    total_private_alleles <- c(sum(private_alleles[,1]), sum(private_alleles[,2]))
+    return(total_private_alleles)
+  } else {
+    # Window mode processing
+    window_results <- process_vcf_in_windows(vcf_path,
+                                             window_size = window_size,
+                                             skip_size = skip_size,
+                                             threads = threads,
+                                             write_log = write_log,
+                                             logfile = logfile,
+                                             custom_function = function(fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals, pop2_individuals) {
+                                               # Separate populations
+                                               sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
+                                               sep_pop1 <- sep$pop1
+                                               sep_pop2 <- sep$pop2
+
+                                               # Calculate allele frequencies for each population
+                                               allele_freqs_pop1 <- calculateAlleleFreqs(sep_pop1)
+                                               allele_freqs_pop2 <- calculateAlleleFreqs(sep_pop2)
+
+                                               private_alleles_pop1 <- 0
+                                               private_alleles_pop2 <- 0
+                                               # Identify private alleles
+                                               for (i in 1:nrow(allele_freqs_pop1)) {
+                                                 if (allele_freqs_pop1[i,1] == 1 & allele_freqs_pop2[2] > 0){
+                                                   private_alleles_pop2 <- private_alleles_pop2 + 1
+                                                 }
+                                                 if (allele_freqs_pop2[1] == 1 & allele_freqs_pop1[2] > 0){
+                                                   private_alleles_pop1 <- private_alleles_pop1 + 1
+                                                 }
+                                               }
+                                               return(c(chrom, start_pos, end_pos, private_alleles_pop1, private_alleles_pop2))
+                                             })
+
+    # Bind results per window into a list of data frames
+    private_alleles_windows <-as.data.frame(do.call("rbind", window_results))
+    colnames(df) <- c("Chromosome", "Start", "End", "PrivateAllelesPop1", "PrivateAllelesPop2")
+    return(private_alleles_windows)
+  }
+}
+
+
+### Change to work with process_vcf_in_batches ###
 #' Observed Heterozygosity
 #'
 #' This function calculates the observed heterozygosity in a population.
@@ -261,7 +399,7 @@ ObservedHeterozygosity <- function(object) {
   return(Ho)
 }
 
-
+### Change to work with process_vcf_in_batches ###
 #' Expected Heterozygosity
 #'
 #' This function calculates the expected heterozygosity of a population.
@@ -296,6 +434,7 @@ ExpectedHeterozygosity <- function(object) {
   return(He)
 }
 
+### Change to work with process_vcf_in_batches ###
 #' Pi
 #'
 #' Calculate the average number of nucleotide differences per site between two sequences. Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
@@ -359,6 +498,7 @@ Pi <- function(object, seq_length) {
   return(pi_value)
 }
 
+### Change to work with process_vcf_in_batches ###
 #' Tajima's D
 #'
 #' Calculate Tajima's D statistic for a given dataset, a measure for neutrality.
@@ -388,7 +528,7 @@ TajimasD <- function(object, seq_length) {
   # Calculate the number of segregating sites
   S <- SegregatingSites(object)
 
-  # Calculate number of nucleotide differences (pi)
+  # Calculate number of nucleotide differences
   pi <- Pi(object, seq_length) * seq_length
 
   # Calculate constants based on sample size n
@@ -411,12 +551,13 @@ TajimasD <- function(object, seq_length) {
   # Step 5: Calculate the denominator of Tajima's D, which is the square root of the variance of the difference between pi and S/a1
   denominator <- sqrt((e1 * S) + (e2 * S * (S - 1)))
   # Step 6: Calculate Tajima's D
-  # This is the difference between pi and the mean number of pairwise differences (S/a1), divided by the standard deviation (denominator)
+  # This is the difference between the number of nucleotide differences and the mean number of pairwise differences (S/a1), divided by the standard deviation (denominator)
   D <- (pi - (S / a1)) / denominator
 
   return(D)
 }
 
+### Change to work with process_vcf_in_batches ###
 #' WattersonsTheta
 #'
 #' Calculate Watterson's thea, a measure for neutrality, from an GPvcfR object. The metric will be normalized by the sequence length to make it comparable between data sets.
@@ -454,6 +595,7 @@ WattersonsTheta <- function(object, seq_length) {
   return(WattersonsTheta / seq_length)
 }
 
+### Change to work with process_vcf_in_batches ###
 #' Dxy
 #'
 #' Calculate the average number of nucleotide differences per site (Dxy) between two populations. Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.52699).
@@ -524,7 +666,7 @@ Dxy <- function(object, pop_assignments, seq_length) {
   return(dxy_value)
 }
 
-
+### Change to work with process_vcf_in_batches ###
 #' Fst
 #'
 #' Calculate the mean or weighted (by number of non missing chromsomes) fixiation index (Fst) from two populations in a list of GPvcfR objects using the method of Weir and Cockerham (1984).
@@ -653,6 +795,7 @@ Fst <- function(object, pop_assignments, weighted = FALSE) {
   return(Fst_final)
 }
 
+### Change to work with process_vcf_in_batches ###
 #' OneDimSFS
 #'
 #' Calculate a one dimensional site frequency spectrum from an GPvcfR object.
@@ -726,6 +869,7 @@ OneDimSFS <- function(object, folded = FALSE) {
   return(sfs)
 }
 
+### Change to work with process_vcf_in_batches ###
 #' TwoDimSFS
 #'
 #' Calculate a two-dimensional site frequency spectrum from a list of two GPvcfR objects.
