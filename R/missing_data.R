@@ -369,13 +369,28 @@ rfImputation <- function(vcf_path, output_vcf, batch_size = 1000, maxiter = 10, 
                            # Perform missForest imputation on the batch
                            imputed <- missForest(numeric_gt, maxiter = maxiter, ntree = ntree)$ximp
 
-                           # Ensure imputed values are integers (0, 1, 2, etc.)
-                           imputed <- round(imputed)
-                           imputed[is.na(imputed)] <- 0  # Optionally handle any remaining NAs
+                           # Ensure imputed values are integers
+                           imputed <- matrix(as.character(round(as.numeric(imputed))),
+                                                   ncol = ncol(imputed),
+                                                   nrow = nrow(imputed))
 
-                           # Convert the imputed matrix back to the VCF genotype format
-                           # This step will depend on how your VCF encodes genotypes and may need adjustment
-                           vcf_formatted_gt <- apply(imputed, c(1,2), function(x) paste0(x, "|", x))  # Simple example for diploid
+                           if (ncol(imputed) != ncol(sep_gt)) {
+                             e <- simpleError("One or more individuals have only missing Genotypes, batch not imputed.")
+                             stop(e)
+                           }
+
+                           # Prepare matrix for reformatting the imputed genotypes
+                           vcf_formatted_gt <- matrix(NA,
+                                                      ncol = (ncol(imputed) / 2) + 1,
+                                                      nrow = nrow(imputed))
+                           # Write the data rows
+                           for (i in seq_len(nrow(imputed))) {
+                             # Combine genotypes into the VCF genotype format
+                             gt <- apply(matrix(imputed[i, ], ncol = 2, byrow = TRUE), 1, function(g) {
+                               paste(g, collapse = "/")
+                             })
+                             vcf_formatted_gt[i, ] <- c("GT", gt)
+                           }
 
                            # Combine the fix information with the imputed genotypes to get full VCF lines
                            full_vcf_lines <- cbind(fix, vcf_formatted_gt)
@@ -389,21 +404,28 @@ rfImputation <- function(vcf_path, output_vcf, batch_size = 1000, maxiter = 10, 
                            # Return the path to the temporary file with an identifier (e.g., first position in the batch)
                            return(list(file = temp_file, index = index))
                          })
-
+  # Removing NULL elements from the batch results list (NULL is returned if an error occurred in the process, error message is written to log file.)
+  batch_results <- Filter(Negate(is.null), batch_results)
   # Assuming batch_results is a list of lists with 'file' and 'first_pos'
   # Sort the temporary file paths based on the first position in each batch to ensure correct order
   ordered_temp_files <- batch_results[order(sapply(batch_results, `[[`, "index"))]
-
+  i <- 1
   for (temp_info in ordered_temp_files) {
     temp_file <- temp_info$file
-    # Read the compressed imputed data from each temporary file
-    imputed_data <- read.table(gzfile(temp_file))
 
-    # Append the imputed data to the final VCF file
-    write.table(imputed_data, output_vcf, append = TRUE, col.names = FALSE, row.names = FALSE, quote = FALSE, sep = "\t")
+    if (file.exists(temp_file)) {
+      # Read the compressed imputed data from each temporary file
+      imputed_data <- read.table(gzfile(temp_file))
 
-    # Delete the temporary file
-    file.remove(temp_file)
+      # Append the imputed data to the final VCF file
+      write.table(imputed_data, output_vcf, append = TRUE, col.names = FALSE, row.names = FALSE, quote = FALSE, sep = "\t")
+
+      # Delete the temporary file
+      file.remove(temp_file)
+    } else {
+      message(paste0("Batch file number ", i, " does not exist, more information in the log file. Skipping."))
+    }
+    i <- i + 1
   }
   zipped <- bgzip(output_vcf, overwrite = TRUE)
   file.remove(output_vcf)

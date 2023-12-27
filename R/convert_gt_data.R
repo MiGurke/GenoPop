@@ -152,7 +152,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
         stringsAsFactors = FALSE
       )
 
-      # Remove SNP's that are not biallelic
+      # Remove SNP's that are not biallelic or complex
       biallelic_indices <- which(nchar(as.character(fix$ALT)) == 1)
       fix <- fix[biallelic_indices, ]
 
@@ -177,9 +177,13 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
       sep_gt <- matrix(NA, nrow = nrow(gt_matrix), ncol = ploidy * ncol(gt_matrix))
 
       for (i in seq_len(nrow(gt_matrix))) {
+        # Check if there are multiple fields in the genotype data
+        if (any(grepl(":", gt_matrix[i, ]))) {
+          # Extract the GT part (assumes it's the first field)
+          gt_matrix[i, ] <- sapply(strsplit(gt_matrix[i, ], ":"), `[`, 1)
+        }
         # Separate alleles for each variant and assign to the matrix
-        separated_gt <- strsplit(gt_matrix[i, ], separator)
-        sep_gt[i, ] <- unlist(lapply(separated_gt, function(x) ifelse(length(x) < ploidy, rep(NA, ploidy), x)))
+        sep_gt[i, ] <- unlist(strsplit(gt_matrix[i, ], separator))
       }
 
       # Assign column names (e.g., "Sample1_1", "Sample1_2" for diploid)
@@ -189,6 +193,13 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
 
       # Apply the custom function to the batch data
       process_result <- custom_function(index, fix, sep_gt, pop1_individuals, pop2_individuals)
+
+      if (write_log) {
+        log_progress(paste0(Sys.time(), " Completed batch ", index, ": ", chrom, ":", start_pos, "-", end_pos, "\n"), logfile)
+      }
+
+      return(process_result)
+
     }, error = function(e) {
       # Return or log the error information
       if (write_log) {
@@ -196,12 +207,6 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
       }
       return(NULL)  # Return NULL or some error indication
     })
-
-    if (write_log) {
-      log_progress(paste0(Sys.time(), " Completed batch ", index, ": ", chrom, ":", start_pos, "-", end_pos, "\n"), logfile)
-    }
-
-    return(process_result)
   }
 
   # Stop the cluster
@@ -309,7 +314,6 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
     }
     file.create(logfile)
   }
-
   # Process each window in parallel
   results <- foreach(window_coord = window_coordinates, .packages = c("Rsamtools", "GenomicRanges")) %dopar% {
     tryCatch({
@@ -353,6 +357,7 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
         # Assuming genotype data is in the 10th column onwards in VCF format
         gt_matrix <- data_matrix[biallelic_indices, 10:ncol(data_matrix)]
         rm(data_matrix)
+        print(head(gt_matrix))
 
         # Detect separators for alleles (commonly '/' or '|')
         allele_separators <- unique(gsub("[^/|]", "", gt_matrix))
@@ -372,8 +377,8 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
 
         for (i in seq_len(nrow(gt_matrix))) {
           # Separate alleles for each variant and assign to the matrix
-          separated_gt <- strsplit(gt_matrix[i, ], separator)
-          sep_gt[i, ] <- unlist(lapply(separated_gt, function(x) ifelse(length(x) < ploidy, rep(NA, ploidy), x)))
+          sep_gt[i, ] <- strsplit(gt_matrix[i, ], separator)
+          #sep_gt[i, ] <- unlist(lapply(separated_gt, function(x) ifelse(length(x) < ploidy, rep(NA, ploidy), x)))
         }
 
         # Assign column names (e.g., "Sample1_1", "Sample1_2" for diploid)
