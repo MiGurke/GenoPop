@@ -68,14 +68,14 @@ FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.
                                             threads = threads,
                                             write_log = write_log,
                                             logfile = logfile,
-                                            custom_function = function(fix, sep_gt, chrom, start_pos, end_pos,pop1_individuals = NULL, pop2_individuals = NULL) {
+                                            custom_function = function(index, fix, sep_gt, chrom, start_pos, end_pos,pop1_individuals = NULL, pop2_individuals = NULL) {
                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
                                               # Count fixed sites for the alternative allele in this batch
                                               return(c(chrom, start_pos, end_pos, sum(apply(allele_freqs, 1, function(x) any(x[2] == 1)))))
                                             })
     # Bind results per window into a data frame
     fixed_sites_df <- as.data.frame(do.call("rbind", window_results))
-    colnames(fixed_sites_df) <- c("Chromosome", "Start", "End", "FixedSites")
+    #colnames(fixed_sites_df) <- c("Chromosome", "Start", "End", "FixedSites")
     return(fixed_sites_df)
   }
 }
@@ -286,7 +286,7 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
                                             logfile = logfile,
                                             pop1_individuals = pop1_individuals,
                                             pop2_individuals = pop2_individuals,
-                                            custom_function = function(index, fix, sep_gt, pop1_individuals, pop2_individuals) {
+                                            custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                               # Separate populations
                                               sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
                                               sep_pop1 <- sep$pop1
@@ -300,10 +300,10 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
                                               private_alleles_pop2 <- 0
                                               # Identify private alleles
                                               for (i in 1:nrow(allele_freqs_pop1)) {
-                                                if (allele_freqs_pop1[i,1] == 1 & allele_freqs_pop2[2] > 0){
+                                                if (allele_freqs_pop1[i,1] == 1 && allele_freqs_pop2[i,2] > 0){
                                                   private_alleles_pop2 <- private_alleles_pop2 + 1
                                                 }
-                                                if (allele_freqs_pop2[1] == 1 & allele_freqs_pop1[2] > 0){
+                                                if (allele_freqs_pop2[i,1] == 1 && allele_freqs_pop1[i,2] > 0){
                                                   private_alleles_pop1 <- private_alleles_pop1 + 1
                                                 }
                                               }
@@ -354,311 +354,414 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
 }
 
 
-### Change to work with process_vcf_in_batches ###
-#' Observed Heterozygosity
+#' Calculate Observed Heterozygosity from VCF File
 #'
-#' This function calculates the observed heterozygosity in a population.
+#' This function calculates the observed heterozygosity (Ho) for each variant in a VCF file.
+#' It processes the file in batches for efficient memory usage.
 #'
-#' @param object An S4 object of type GPvcfR.
+#' @param vcf_path Path to the VCF file.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (default of 10,000 should be suitable for most use cases).
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
 #'
-#' @return Observed heterozygosity.
+#' @return Observed heterozygosity averaged over all loci.
 #'
 #' @examples
-#' data("mys", package = "GenoPop")
-#' ObservedHeterozygosity(mys)
+#' vcf_path <- "path/to/your/vcf/file"
+#' Ho <- ObservedHeterozygosity(vcf_path)
 #'
 #' @export
 
-ObservedHeterozygosity <- function(object) {
-  # Extract the genotype matrix
-  sep <- object@sep_gt
-  imp <- object@imp_gt
-  genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
+ObservedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+  # Batch mode processing
+  batch_results <- process_vcf_in_batches(vcf_path,
+                                          batch_size = batch_size,
+                                          threads = threads,
+                                          write_log = write_log,
+                                          logfile = logfile,
+                                          custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
+                                            # Replace '.' with NA for missing data
+                                            sep_gt[sep_gt == "."] <- NA
+                                            num_individuals <- ncol(sep_gt) / 2  # assuming diploid organisms
+                                            heterozygotes <- 0
 
-  # Check if we actually found some genotype data
-  if (is.null(genotype_matrix) || nrow(genotype_matrix) == 0) {
-    stop("No genotype data available in the object.")
-  }
+                                            # Iterate over individuals by stepping 2 columns at a time
+                                            for (indiv_col in seq(1, ncol(sep_gt), by = 2)) {
+                                              individual_genotypes <- sep_gt[, c(indiv_col, indiv_col + 1)]
+                                              heterozygotes <- heterozygotes + sum(apply(individual_genotypes, 1, function(locus) {
+                                                # Only count as a heterozygote if neither allele is NA and they are different
+                                                !is.na(locus[1]) && !is.na(locus[2]) && locus[1] != locus[2]
+                                              }))
+                                            }
 
-  # Replace '.' with NA for missing data
-  genotype_matrix[genotype_matrix == "."] <- NA
+                                            # Return the count of heterozygotes and the number of valid loci per individual
+                                            return(c(heterozygotes, num_individuals * nrow(sep_gt)))
+                                          })
 
-  # Calculate observed heterozygosity
-  num_individuals <- ncol(genotype_matrix) / 2  # assuming diploid organisms
-  heterozygotes <- 0
+  # Combine the counts from all batches and calculate the mean
+  all_heterozygotes <- sum(sapply(batch_results, function(x) x[1]))
+  all_valid_loci <- sum(sapply(batch_results, function(x) x[2]))
+  Ho <- all_heterozygotes / all_valid_loci
 
-  # Iterate over individuals by stepping 2 columns at a time
-  for (indiv_col in seq(1, ncol(genotype_matrix), by = 2)) {
-    individual_genotypes <- genotype_matrix[, c(indiv_col, indiv_col + 1)]
-    heterozygotes <- heterozygotes + sum(apply(individual_genotypes, 1, function(locus) {
-        locus[1] != locus[2]
-    }))
-  }
-
-  Ho <- heterozygotes / (num_individuals * nrow(genotype_matrix))
   return(Ho)
 }
 
-### Change to work with process_vcf_in_batches ###
-#' Expected Heterozygosity
+
+#' Calculate Expected Heterozygosity from VCF File
 #'
-#' This function calculates the expected heterozygosity of a population.
+#' This function calculates the expected heterozygosity (He) for each variant in a VCF file.
+#' It processes the file in batches for efficient memory usage.
 #'
-#' @param object An S4 object of type GPvcfR. Allele frequencies must be present.
+#' @param vcf_path Path to the VCF file.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (default of 10,000 should be suitable for most use cases).
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
 #'
-#' @return Expected heterozygosity.
+#' @return Expected heterozygosity averaged over all loci.
 #'
 #' @examples
-#' data("mys", package = "GenoPop")
-#' ExpectedHeterozygosity(mys)
+#' vcf_path <- "path/to/your/vcf/file"
+#' He <- ExpectedHeterozygosity(vcf_path)
 #'
 #' @export
 
-ExpectedHeterozygosity <- function(object) {
-  # Extract allele frequencies
-  allele_freqs <- object@allele_freqs
+ExpectedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+  # Batch mode processing
+  batch_results <- process_vcf_in_batches(vcf_path,
+                                          batch_size = batch_size,
+                                          threads = threads,
+                                          write_log = write_log,
+                                          logfile = logfile,
+                                          custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
+                                            # Calculate allele frequencies for this batch
+                                            allele_freqs <- calculateAlleleFreqs(sep_gt)
+                                            # Calculate expected heterozygosity per locus for this batch
+                                            He_per_locus <- apply(allele_freqs, 1, function(p) {
+                                              1 - sum(p^2)
+                                            })
+                                            return(He_per_locus)
+                                          })
 
-  # Check if allele frequencies are present
-  if (is.null(allele_freqs) || nrow(allele_freqs) == 0) {
-    stop("No allele frequency data available in the object.")
-  }
-
-  # Calculate expected heterozygosity per locus
-  He_per_locus <- apply(allele_freqs, 1, function(p) {
-    1 - sum(p^2)
-  })
-
-  # Average over all loci
-  He <- mean(He_per_locus)
+  # Combine the He per locus from all batches and calculate the mean
+  all_He_per_locus <- unlist(batch_results)
+  He <- mean(all_He_per_locus, na.rm = TRUE)
 
   return(He)
 }
 
-### Change to work with process_vcf_in_batches ###
-#' Pi
+
+#' Calculate Nucleotide Diversity (Pi) from VCF File
 #'
-#' Calculate the average number of nucleotide differences per site between two sequences. Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
+#' This function calculates the nucleotide diversity (Pi) for a VCF file. Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
+#' It processes the file in batches for efficient memory usage and requires the overall sequence length.
 #' The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
 #' Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326), but for simplicity assuming that completely missing sites are invariant sites, which will underestimate Pi.
 #' Otherwise this would only function with VCF files that include all monomorphic sites, which may be unpractical given common data sets.
 #' If you happen to know the number of missing sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic sites as the sequence length to get the most accurate estimation of Pi.
 #'
-#' @param object An S4 object of type GPvcfR.
-#' @param seq_length Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.
+#' @param vcf_path Path to the VCF file.
+#' @param seq_length Total length of the sequence in number of bases.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (default of 10,000 should be suitable for most use cases).
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
 #'
-#' @return The nucleotide diversity (Pi).
+#' @return Nucleotide diversity (Pi) across the sequence.
 #'
 #' @examples
-#' data("mys", package = "GenoPop")
-#' Pi(mys, 265392)
+#' vcf_path <- "path/to/your/vcf/file"
+#' total_sequence_length <- 265392  # Total length of the sequence
+#' pi_value <- Pi(vcf_path, total_sequence_length)
 #'
 #' @export
 
-Pi <- function(object, seq_length) {
-  # Assuming the object has slots for the genotype and other necessary data.
-  # Extract the genotype matrix from the object
-  sep <- object@sep_gt
-  imp <- object@imp_gt
-  genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
+Pi <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+  # Batch mode processing
+  batch_results <- process_vcf_in_batches(vcf_path,
+                                          batch_size = batch_size,
+                                          threads = threads,
+                                          write_log = write_log,
+                                          logfile = logfile,
+                                          custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
+                                            sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
+                                            N_mismatches_batch <- as.numeric(0)
+                                            N_comparisons_batch <- as.numeric(0)
+                                            num_chroms <- ncol(sep_gt)
 
-  N_mismatches_total <- as.numeric(0)
-  N_comparisons_total <- as.numeric(0)
-  num_chroms <- ncol(genotype_matrix)
+                                            for (site_index in seq_len(nrow(sep_gt))) {
+                                              site_genotypes <- sep_gt[site_index, !is.na(sep_gt[site_index, ])]
+                                              site_allele_freqs <- table(site_genotypes)  # Allele frequencies at this site
 
-  # Check if there are any variants in this window
-  if (nrow(genotype_matrix) == 0) {
-    # If no variants, the Pi is 0 for this window, considering only monomorphic sites
-    return(0)
-  }
+                                              # Total alleles at this site (not missing)
+                                              N_non_missing_chr <- sum(site_allele_freqs)
 
-  for (site_index in seq_len(nrow(genotype_matrix))) {
-    site_genotypes <- genotype_matrix[site_index, genotype_matrix[site_index, ] != "."]
-    site_allele_freqs <- table(site_genotypes)  # Allele frequencies at this site
+                                              # Number of actual nucleotide differences (mismatches) for the site
+                                              N_site_mismatches <- 0
+                                              for (allele_count in site_allele_freqs) {
+                                                N_site_mismatches <- N_site_mismatches + (allele_count * (N_non_missing_chr - allele_count))
+                                              }
 
-    # Total alleles at this site (not missing)
-    N_non_missing_chr <- sum(site_allele_freqs)
+                                              N_mismatches_batch <- N_mismatches_batch + N_site_mismatches
+                                              N_comparisons_batch <- N_comparisons_batch + (N_non_missing_chr * (N_non_missing_chr - 1))
+                                            }
 
-    # Number of actual nucleotide differences (mismatches) for the site
-    N_site_mismatches <- 0
-    for (allele_count in site_allele_freqs) {
-      N_site_mismatches <- N_site_mismatches + (allele_count * (N_non_missing_chr - allele_count))
-    }
+                                            return(c(N_mismatches_batch, N_comparisons_batch, nrow(sep_gt), num_chroms))
+                                          })
 
-    N_mismatches_total <- N_mismatches_total + N_site_mismatches
-    N_comparisons_total <- N_comparisons_total + (N_non_missing_chr * (N_non_missing_chr - 1))
-  }
-
+  # Combine the counts from all batches
+  all_N_mismatches <- sum(sapply(batch_results, function(x) x[1]))
+  all_N_comparisons <- sum(sapply(batch_results, function(x) x[2]))
+  all_variants_counted <- sum(sapply(batch_results, function(x) x[3]))
+  num_chroms <- batch_results[[1]][4]
   # Including monomorphic sites
-  N_monomorphic_sites <- seq_length - nrow(genotype_matrix)
-  N_pairs_total <- as.numeric(N_comparisons_total) + (as.numeric(N_monomorphic_sites) * as.numeric(num_chroms) * (as.numeric(num_chroms) - 1))
+  N_monomorphic_sites <- seq_length - all_variants_counted
+  N_pairs_total <- as.numeric(all_N_comparisons) + (as.numeric(N_monomorphic_sites) * as.numeric(num_chroms) * (as.numeric(num_chroms) - 1))
 
-  # Pi calculation for the window
-  pi_value <- N_mismatches_total / N_pairs_total
+  # Pi calculation for the sequence
+  pi_value <- all_N_mismatches / N_pairs_total
 
   return(pi_value)
 }
 
-### Change to work with process_vcf_in_batches ###
-#' Tajima's D
+
+#' Calculate Tajima's D from VCF File
 #'
-#' Calculate Tajima's D statistic for a given dataset, a measure for neutrality.
+#' This function calculates Tajima's D statistic for a given dataset. It processes the file in batches for efficient memory usage.
+#' Tajima's D is a measure for neutrality based on the difference between the number of segregating sites and the average number of nucleotide differences.
 #'
-#' @param object A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.
-#' @param seq_length Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.
+#' @param vcf_path Path to the VCF file.
+#' @param seq_length Total length of the sequence in number of bases.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (default of 10,000 should be suitable for most use cases).
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
 #'
 #' @return Tajima's D value.
 #'
 #' @examples
-#' data("mys", package = "GenoPop")
-#' TajimasD(mys, 265392)
+#' vcf_path <- "path/to/your/vcf/file"
+#' total_sequence_length <- 265392  # Total length of the sequence
+#' tajimas_d <- TajimasD(vcf_path, total_sequence_length)
 #'
 #' @export
 
-TajimasD <- function(object, seq_length) {
-  # Extract the genotype matrix
-  sep <- object@sep_gt
-  imp <- object@imp_gt
-  genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
+TajimasD <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+  # Batch mode processing
+  batch_results <- process_vcf_in_batches(vcf_path,
+                                          batch_size = batch_size,
+                                          threads = threads,
+                                          write_log = write_log,
+                                          logfile = logfile,
+                                          custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
+                                            sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
+                                            num_chroms <- ncol(sep_gt)
+                                            n <- num_chroms  # Number of chromosomes
 
-  # Check if there's actual genotype data
-  if (is.null(genotype_matrix) || nrow(genotype_matrix) == 0) {
-    stop("No genotype data available in the object.")
-  }
+                                            # Calculate segregating sites (S) for the batch
+                                            S_batch <- sum(apply(sep_gt, 1, function(row) {
+                                              length(unique(na.omit(row))) > 1
+                                            }))
 
-  # Calculate the number of segregating sites
-  S <- SegregatingSites(object)
+                                            # Calculate Pi for the batch
+                                            N_mismatches_batch <- as.numeric(0)
+                                            N_comparisons_batch <- as.numeric(0)
+                                            for (site_index in seq_len(nrow(sep_gt))) {
+                                              site_genotypes <- sep_gt[site_index, !is.na(sep_gt[site_index, ])]
+                                              site_allele_freqs <- table(site_genotypes)  # Allele frequencies at this site
 
-  # Calculate number of nucleotide differences
-  pi <- Pi(object, seq_length) * seq_length
+                                              # Total alleles at this site (not missing)
+                                              N_non_missing_chr <- sum(site_allele_freqs)
 
-  # Calculate constants based on sample size n
-  n <- ncol(genotype_matrix)
-  # Step 1: Calculate a1 and a2, which are summations used in the denominator of Tajima's D
-  # These summations are over 1/i and 1/i^2, respectively, from i = 1 to (n-1)
+                                              # Number of actual nucleotide differences (mismatches) for the site
+                                              N_site_mismatches <- 0
+                                              for (allele_count in site_allele_freqs) {
+                                                N_site_mismatches <- N_site_mismatches + (allele_count * (N_non_missing_chr - allele_count))
+                                              }
+
+                                              N_mismatches_batch <- N_mismatches_batch + N_site_mismatches
+                                              N_comparisons_batch <- N_comparisons_batch + (N_non_missing_chr * (N_non_missing_chr - 1))
+                                            }
+
+                                            return(c(S_batch, N_mismatches_batch, N_comparisons_batch, nrow(sep_gt), num_chroms))
+                                          })
+
+  # Aggregate the results from all batches
+  total_S <- sum(sapply(batch_results, function(x) x[1]))
+  all_N_mismatches <- sum(sapply(batch_results, function(x) x[2]))
+  all_N_comparisons <- sum(sapply(batch_results, function(x) x[3]))
+  all_variants_counted <- sum(sapply(batch_results, function(x) x[4]))
+  num_chroms <- batch_results[[1]][5]  # Assuming number of chromosomes is consistent across all batches
+
+  # Including monomorphic sites
+  N_monomorphic_sites <- seq_length - all_variants_counted
+  N_pairs_total <- as.numeric(all_N_comparisons) + (as.numeric(N_monomorphic_sites) * as.numeric(num_chroms) * (as.numeric(num_chroms) - 1))
+
+  # Pi calculation for the sequence
+  total_pi <- all_N_mismatches / N_pairs_total
+
+  # Constants for Tajima's D calculation
+  n <- num_chroms
   i_values <- 1:(n-1)
   a1 <- sum(1 / i_values)
   a2 <- sum(1 / (i_values^2))
-  # Step 2: Calculate b1 and b2, constants used for the estimation of the variance
   b1 <- (n + 1) / (3 * (n - 1))
   b2 <- (2 * (n^2 + n + 3)) / (9 * n * (n - 1))
-  # Step 3: Calculate c1 and c2, which scale b1 and b2 by a1 and a2 to get the actual variance components
   c1 <- b1 - (1 / a1)
   c2 <- b2 - ((n + 2) / (a1 * n)) + (a2 / (a1^2))
-  # Step 4: Calculate e1 and e2, which are used in the denominator of Tajima's D
-  # These represent the expectations of the variance and covariance, respectively
   e1 <- c1 / a1
   e2 <- c2 / (a1^2 + a2)
-  # Step 5: Calculate the denominator of Tajima's D, which is the square root of the variance of the difference between pi and S/a1
-  denominator <- sqrt((e1 * S) + (e2 * S * (S - 1)))
-  # Step 6: Calculate Tajima's D
-  # This is the difference between the number of nucleotide differences and the mean number of pairwise differences (S/a1), divided by the standard deviation (denominator)
-  D <- (pi - (S / a1)) / denominator
+
+  # Including monomorphic sites
+  N_monomorphic_sites <- seq_length - all_variants_counted
+  pi <- total_pi * seq_length  # Adjust total pi by sequence length to get average pi per site
+
+  # Tajima's D calculation
+  denominator <- sqrt((e1 * total_S) + (e2 * total_S * (total_S - 1)))
+  D <- (pi - (total_S / a1)) / denominator
 
   return(D)
 }
 
-### Change to work with process_vcf_in_batches ###
-#' WattersonsTheta
+
+#' Calculate Watterson's Theta from VCF File
 #'
-#' Calculate Watterson's thea, a measure for neutrality, from an GPvcfR object. The metric will be normalized by the sequence length to make it comparable between data sets.
+#' This function calculates Watterson's Theta, a measure for neutrality, from a VCF file. It processes the file in batches for efficient memory usage.
+#' The metric will be normalized by the sequence length to make it comparable between datasets.
 #'
-#' @param object A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.
+#' @param vcf_path Path to the VCF file.
 #' @param seq_length The length of the sequence in the data set.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (default of 10,000 should be suitable for most use cases).
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
 #'
-#' @return Watterson's theta value.
+#' @return Watterson's theta value normalized by the sequence length.
 #'
 #' @examples
-#' data("mys", package = "GenoPop")
-#' WattersonsTheta(mys, 265392)
+#' vcf_path <- "path/to/your/vcf/file"
+#' total_sequence_length <- 265392  # Total length of the sequence
+#' wattersons_theta <- WattersonsTheta(vcf_path, total_sequence_length)
 #'
 #' @export
 
-WattersonsTheta <- function(object, seq_length) {
-  # Extract the genotype matrix
-  sep <- object@sep_gt
-  imp <- object@imp_gt
-  genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
+WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+  # Batch mode processing
+  batch_results <- process_vcf_in_batches(vcf_path,
+                                          batch_size = batch_size,
+                                          threads = threads,
+                                          write_log = write_log,
+                                          logfile = logfile,
+                                          custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
+                                            sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
 
-  # Check if there's actual genotype data
-  if (is.null(genotype_matrix) || nrow(genotype_matrix) == 0) {
-    stop("No genotype data available in the object.")
-  }
+                                            # Calculate segregating sites (S) for the batch
+                                            S_batch <- sum(apply(sep_gt, 1, function(row) {
+                                              length(unique(na.omit(row))) > 1
+                                            }))
 
-  # Calculate the number of segregating sites
-  S <- SegregatingSites(object)
-  # Calculate constants based on sample size n
-  n <- ncol(genotype_matrix)
-  # The sum of the harmonic series until n-1
+                                            return(c(S_batch, ncol(sep_gt)))  # Return S and number of chromosomes
+                                          })
+
+  # Aggregate the results from all batches
+  total_S <- sum(sapply(batch_results, function(x) x[1]))
+  num_chroms <- batch_results[[1]][2]  # Assuming number of chromosomes is consistent across all batches
+
+  # Constants for Watterson's Theta calculation
+  n <- num_chroms  # Sample size
   i_values <- 1:(n-1)
   a1 <- sum(1 / i_values)
-  WattersonsTheta <- S / a1
-  return(WattersonsTheta / seq_length)
+
+  # Watterson's Theta calculation
+  wattersons_theta <- total_S / a1
+
+  # Normalize by the sequence length
+  normalized_wattersons_theta <- wattersons_theta / seq_length
+
+  return(normalized_wattersons_theta)
 }
 
-### Change to work with process_vcf_in_batches ###
-#' Dxy
+
+#' Calculate Average Nucleotide Differences (Dxy) from VCF File
 #'
-#' Calculate the average number of nucleotide differences per site (Dxy) between two populations. Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.52699).
+#' This function calculates the average number of nucleotide differences per site (Dxy) between two populations from a VCF file.  Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.52699).
 #' Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326), but for simplicity assuming that completely missing sites are invariant sites, which will underestimate Dxy.
 #' Otherwise this would only function with VCF files that include all monomorphic sites, which may be unpractical given common data sets.
 #' If you happen to know the number of missing sites vs the number of monomorphic sites, please just use the number of monomorphic + the number of polymorphic sites as the sequence length to the the most accurate estimation of Dxy.
 #'
-#' @param object A GPvcfR object.
-#' @param pop_assignments A named vector with elements being the population names and names being the individual names.
+#' @param vcf_path Path to the VCF file.
+#' @param pop1_individuals Vector of individual names belonging to the first population.
+#' @param pop2_individuals Vector of individual names belonging to the second population.
 #' @param seq_length Length of the sequence in number of bases, including monomorphic sites.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (default of 10,000 should be suitable for most use cases).
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
 #'
-#' @return The average number of nucleotide substitutions per sitej between the individuals of two populations (Dxy).
+#' @return The average number of nucleotide substitutions per site between the individuals of two populations (Dxy).
 #'
 #' @examples
-#' data("mys", package = "GenoPop")
-#' mys1 <- c("8449", "8128", "8779")
-#' mys2 <- c("8816", "8823", "8157")
-#' individuals <- c(mys1, mys2)
-#' pop_names <- c(rep("pop1", length(mys1)), rep("pop2", length(mys2)))
-#' pop_assignments <- setNames(pop_names, individuals)
-#' Dxy(mys, pop_assignments, 265392)
+#' vcf_path <- "path/to/your/vcf/file"
+#' pop1_individuals <- c("8449", "8128", "8779")
+#' pop2_individuals <- c("8816", "8823", "8157")
+#' total_sequence_length <- 265392  # Total length of the sequence
+#' dxy_value <- Dxy(vcf_path, pop1_individuals, pop2_individuals, total_sequence_length)
 #'
 #' @export
 
-Dxy <- function(object, pop_assignments, seq_length) {
-  # Check for necessary components in the object
-  if (!("sep_gt" %in% slotNames(object))) {
-    stop("The object does not have the necessary sep_gt component.")
-  }
+Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+  # Batch mode processing
+  batch_results <- process_vcf_in_batches(vcf_path,
+                                          batch_size = batch_size,
+                                          threads = threads,
+                                          write_log = write_log,
+                                          logfile = logfile,
+                                          pop1_individuals = pop1_individuals,
+                                          pop2_individuals = pop2_individuals,
+                                          custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
+                                            # Separate populations
+                                            sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
+                                            pop1_genotypes <- sep$pop1
+                                            pop2_genotypes <- sep$pop2
 
-  # Separate the populations according to the population assignments
-  separated_pops <- separateByPopulations(object, pop_assignments, rm_ref_alleles = FALSE)
-  pop1 <- separated_pops[[1]]
-  pop2 <- separated_pops[[2]]
+                                            # Initialize counters for nucleotide differences and comparisons
+                                            diffs_batch <- as.numeric(0)
+                                            comparisons_batch <- as.numeric(0)
 
-  # Get the genotype matrices for both populations
-  genotypes1 <- if (!is.null(pop1@imp_gt) && nrow(pop1@imp_gt) != 0) pop1@imp_gt else pop1@sep_gt
-  genotypes2 <- if (!is.null(pop2@imp_gt) && nrow(pop2@imp_gt) != 0) pop2@imp_gt else pop2@sep_gt
+                                            # Iterate over polymorphic sites
+                                            for (site_index in seq_len(nrow(pop1_genotypes))) {
+                                              site_genotypes1 <- pop1_genotypes[site_index, ]
+                                              site_genotypes2 <- pop2_genotypes[site_index, ]
 
-  # Initialize counters for nucleotide differences and comparisons
-  total_diffs <- as.numeric(0)
-  total_comparisons <- as.numeric(0)
+                                              # Calculate differences for each allele combination between populations
+                                              for (i in seq_along(site_genotypes1)) {
+                                                for (j in seq_along(site_genotypes2)) {
+                                                  if (site_genotypes1[i] != "." && site_genotypes2[j] != ".") {
+                                                    diffs_batch <- diffs_batch + as.numeric(site_genotypes1[i] != site_genotypes2[j])
+                                                    comparisons_batch <- comparisons_batch + 1
+                                                  }
+                                                }
+                                              }
+                                            }
 
-  # Iterate over polymorphic sites
-  for (site_index in seq_len(nrow(genotypes1))) {
-    site_genotypes1 <- genotypes1[site_index, ]
-    site_genotypes2 <- genotypes2[site_index, ]
+                                            return(c(diffs_batch, comparisons_batch, nrow(sep_gt)))
+                                          })
 
-    # Calculate differences for each allele combination between populations
-    for (i in seq_along(site_genotypes1)) {
-      for (j in seq_along(site_genotypes2)) {
-        if (site_genotypes1[i] != "." && site_genotypes2[j] != ".") {
-          total_diffs <- total_diffs + as.numeric(site_genotypes1[i] != site_genotypes2[j])
-          total_comparisons <- total_comparisons + 1
-        }
-      }
-    }
-  }
+  # Aggregate the results from all batches
+  total_diffs <- sum(sapply(batch_results, function(x) x[1]))
+  total_comparisons <- sum(sapply(batch_results, function(x) x[2]))
+  all_variants_counted <- sum(sapply(batch_results, function(x) x[3]))
 
-  # Include monomorphic sites in total comparisons
-  # Assuming all sites not in VCF are monomorphic and have no differences
-  monomorphic_sites <- seq_length - nrow(genotypes1)
-  total_comparisons <- as.numeric(total_comparisons) + (as.numeric(monomorphic_sites) * as.numeric(ncol(genotypes1)) * as.numeric(ncol(genotypes2)))
+  # Including monomorphic sites in total comparisons
+  monomorphic_sites <- seq_length - all_variants_counted
+  total_comparisons <- total_comparisons + (monomorphic_sites * (length(pop1_individuals) * 2) * (length(pop2_individuals) * 2))
 
   # Calculate Dxy
   dxy_value <- total_diffs / total_comparisons
@@ -666,313 +769,268 @@ Dxy <- function(object, pop_assignments, seq_length) {
   return(dxy_value)
 }
 
-### Change to work with process_vcf_in_batches ###
-#' Fst
+
+#' Calculate Fst from VCF File
 #'
-#' Calculate the mean or weighted (by number of non missing chromsomes) fixiation index (Fst) from two populations in a list of GPvcfR objects using the method of Weir and Cockerham (1984).
+#' This function calculates the fixation index (Fst) between two populations from a VCF file using the method of Weir and Cockerham (1984). It processes the file in batches for efficient memory usage.
+#' The result can be either the mean or weighted Fst based on the number of non-missing chromosomes.
 #'
-#' @param object A GPvcfR object.
-#' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
-#' @param weighted Logical, wether weighted Fst or mean Fst is returned. (Default = FALSE (mean Fst is returned))
+#' @param vcf_path Path to the VCF file.
+#' @param pop1_individuals Vector of individual names belonging to the first population.
+#' @param pop2_individuals Vector of individual names belonging to the second population.
+#' @param weighted Logical, whether weighted Fst or mean Fst is returned (Default = FALSE (mean Fst is returned)).
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (default of 10,000 should be suitable for most use cases).
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
 #'
-#' @return Fst value.
+#' @return Fst value (either mean or weighted).
 #'
 #' @examples
-#' mys1 <- c("8449", "8128", "8779")
-#' mys2 <- c("8816", "8823", "8157")
-#'
-#' individuals <- c(mys1, mys2)
-#' pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
-#' pop_assignments <- setNames(pop_names, individuals)
-#'
-#' data("mys", package = "GenoPop")
-#' Fst(mys, pop_assignments)
+#' vcf_path <- "path/to/your/vcf/file"
+#' pop1_individuals <- c("8449", "8128", "8779")
+#' pop2_individuals <- c("8816", "8823", "8157")
+#' fst_value <- Fst(vcf_path, pop1_individuals, pop2_individuals, weighted = TRUE)
 #'
 #' @export
 
-Fst <- function(object, pop_assignments, weighted = FALSE) {
-  # Check for necessary components in the object
-  if (!all(c("sep_gt", "allele_freqs") %in% slotNames(object))) {
-    stop("The object does not have the necessary components.")
-  }
+Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+  # Batch mode processing
+  batch_results <- process_vcf_in_batches(vcf_path,
+                                          batch_size = batch_size,
+                                          threads = threads,
+                                          write_log = write_log,
+                                          logfile = logfile,
+                                          pop1_individuals = pop1_individuals,
+                                          pop2_individuals = pop2_individuals,
+                                          custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
+                                            # Separate populations
+                                            sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
+                                            genotype_matrix1 <- sep$pop1
+                                            genotype_matrix2 <- sep$pop2
+                                            allele_freqs1 <- calculateAlleleFreqs(genotype_matrix1)
+                                            allele_freqs2 <- calculateAlleleFreqs(genotype_matrix2)
 
-  # Separate the populations
-  separated_pops <- separateByPopulations(object, pop_assignments, rm_ref_alleles = FALSE)
-  pop1 <- separated_pops[[1]]
-  pop2 <- separated_pops[[2]]
+                                            # Calculate average allele frequencies across populations
+                                            mean_freqs <- (allele_freqs1 + allele_freqs2) / 2
 
-  # Extract the genotype matrices
-  sep1 <- pop1@sep_gt
-  imp1 <- pop1@imp_gt
-  genotype_matrix1 <- if (is.null(imp1) || nrow(imp1) == 0) sep1 else imp1
-  sep2 <- pop2@sep_gt
-  imp2 <- pop2@imp_gt
-  genotype_matrix2 <- if (is.null(imp2) || nrow(imp2) == 0) sep2 else imp2
+                                            # Initialize variables for Fst calculation
+                                            Fsts <- c()
+                                            weights <- c()
 
-  # Extract allele frequencies
-  allele_freqs1 <- pop1@allele_freqs
-  allele_freqs2 <- pop2@allele_freqs
+                                            # Iterate over polymorphic sites
+                                            for (i in seq_len(nrow(genotype_matrix1))) {
+                                              # Get the number of non-missing chromosomes
+                                              n1 <- length(genotype_matrix1[i,genotype_matrix1[i,] != "."])
+                                              n2 <- length(genotype_matrix2[i,genotype_matrix2[i,] != "."])
 
-  # Ensure both matrices have the same number of columns by adding zeros if necessary
-  # This can happen if one population has f.e. only the reference allele for all positions.
-  # Especially when used in small windows for the windowed metric calculation.
-  if (ncol(allele_freqs1) != ncol(allele_freqs2)) {
-    max_cols <- max(ncol(allele_freqs1), ncol(allele_freqs2))
-    if (ncol(allele_freqs1) < max_cols) {
-      missing_cols <- setdiff(0:(max_cols - 1), colnames(allele_freqs1))
-      for (col in missing_cols) {
-        allele_freqs1 <- cbind(allele_freqs1, 0)
-        colnames(allele_freqs1)[ncol(allele_freqs1)] <- as.character(col)
-      }
-    }
-    if (ncol(allele_freqs2) < max_cols) {
-      missing_cols <- setdiff(0:(max_cols - 1), colnames(allele_freqs2))
-      for (col in missing_cols) {
-        allele_freqs2 <- cbind(allele_freqs2, 0)
-        colnames(allele_freqs2)[ncol(allele_freqs2)] <- as.character(col)
-      }
-    }
-  }
+                                              # Get all the allele frequencies
+                                              p1 <- as.numeric(allele_freqs1[i, 1])  # frequency of allele 1 in population 1
+                                              p2 <- as.numeric(allele_freqs2[i, 1])  # frequency of allele 1 in population 2
+                                              q1 <- 1 - p1  # frequency of allele 2 in population 1
+                                              q2 <- 1 - p2  # frequency of allele 2 in population 2
+                                              p_bar <- as.numeric(mean_freqs[i, 1])  # average frequency of allele 1
+                                              q_bar <- 1 - p_bar  # average frequency of allele 2
 
-  # Calculate average allele frequencies across populations
-  mean_freqs <- (allele_freqs1 + allele_freqs2) / 2
+                                              # Calculate the expected homozygosity within each population for this locus
+                                              h1 <- p1^2 + q1^2
+                                              h2 <- p2^2 + q2^2
 
-  # Determine the number of loci
-  num_loci <- nrow(allele_freqs1)
+                                              # Calculate the sample variances for this locus
+                                              s1 <- p1 * q1 / (n1 - 1)  # sample variance in population 1
+                                              s2 <- p2 * q2 / (n2 - 1)  # sample variance in population 2
 
-  Fsts <- c()  # Initialize a vector to hold Fst values for each locus
-  weights <- c() # Initialize a vector to hold the weights for each locus
+                                              # Calculate components of genetic variance for this locus
+                                              a <- ((p1 - p_bar)^2 + (p2 - p_bar)^2) / 2 - (s1 + s2) / 2  # among populations
+                                              b <- ((s1 + s2) / 2) - ((1 / (2 * n1)) * (p1 * (1 - p1) + p2 * (1 - p2)) / 2)  # between individuals within populations
+                                              c <- (1 / 2) * ((p1 * (1 - p1) + p2 * (1 - p2)) / 2)  # within individuals
 
-  # Loop through each locus and calculate components of genetic variance
-  for (i in 1:num_loci) {
-    # Get the number of non-missing chromosomes
-    n1 <- length(genotype_matrix1[i,genotype_matrix1[i,] != "."])
-    n2 <- length(genotype_matrix2[i,genotype_matrix2[i,] != "."])
+                                              # Calculate Fst for this locus
+                                              Fst_locus <- a / (a + b + c)
+                                              # Consider negative Fst's to be 0, because they are an artifact of uneven sample sizes.
+                                              if (!is.na(Fst_locus) && Fst_locus < 0) {
+                                                Fst_locus <- 0
+                                              }
+                                              weights <- c(weights, (n1+n2))
+                                              Fsts <- c(Fsts, Fst_locus)
+                                            }
+                                            return(list(Fsts = Fsts, weights = weights))
+                                          })
 
-    # Get all the allele frequencies
-    p1 <- as.numeric(allele_freqs1[i, 1])  # frequency of allele 1 in population 1
-    p2 <- as.numeric(allele_freqs2[i, 1])  # frequency of allele 1 in population 2
-    q1 <- 1 - p1  # frequency of allele 2 in population 1
-    q2 <- 1 - p2  # frequency of allele 2 in population 2
+  # Aggregate Fst values from all batches
+  all_Fsts <- unlist(lapply(batch_results, function(x) x$Fsts))
+  all_weights <- unlist(lapply(batch_results, function(x) x$weights))
 
-    p_bar <- as.numeric(mean_freqs[i, 1])  # average frequency of allele 1
-    q_bar <- 1 - p_bar  # average frequency of allele 2
-
-    # Calculate the expected homozygosity within each population for this locus
-    h1 <- p1^2 + q1^2
-    h2 <- p2^2 + q2^2
-
-    # Calculate the sample variances for this locus
-    s1 <- p1 * q1 / (n1 - 1)  # sample variance in population 1
-    s2 <- p2 * q2 / (n2 - 1)  # sample variance in population 2
-
-    # Calculate components of genetic variance for this locus
-    a <- ((p1 - p_bar)^2 + (p2 - p_bar)^2) / 2 - (s1 + s2) / 2  # among populations
-    b <- ((s1 + s2) / 2) - ((1 / (2 * n1)) * (p1 * (1 - p1) + p2 * (1 - p2)) / 2)  # between individuals within populations
-    c <- (1 / 2) * ((p1 * (1 - p1) + p2 * (1 - p2)) / 2)  # within individuals
-
-    # Calculate Fst for this locus
-    Fst_locus <- a / (a + b + c)
-    # Consider negative Fst's to be 0, because they are an artifact of uneven sample sizes.
-    if (!is.na(Fst_locus) && Fst_locus < 0) {
-      Fst_locus <- 0
-    }
-    if (weighted) {
-      weights <- c(weights, (n1+n2))
-    }
-    Fsts <- c(Fsts, Fst_locus)
-  }
-
+  # Calculate final Fst value
   if (weighted) {
-    fst_weighted_products <- Fsts * weights
+    fst_weighted_products <- all_Fsts * all_weights
     sum_weighted_products <- sum(fst_weighted_products, na.rm = TRUE)
-    sum_weights <- sum(weights, na.rm = TRUE)
+    sum_weights <- sum(all_weights, na.rm = TRUE)
     Fst_final <- sum_weighted_products / sum_weights
   } else {
-    Fst_final <- mean(Fsts, na.rm = TRUE)
+    Fst_final <- mean(all_Fsts, na.rm = TRUE)
   }
 
   return(Fst_final)
 }
 
-### Change to work with process_vcf_in_batches ###
-#' OneDimSFS
+
+#' Calculate One Dimensional Site Frequency Spectrum from VCF File
 #'
-#' Calculate a one dimensional site frequency spectrum from an GPvcfR object.
+#' This function calculates a one-dimensional site frequency spectrum from a VCF file. It processes the file in batches for efficient memory usage.
+#' The user can decide between a folded or unfolded spectrum.
 #'
-#' @param object A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.
-#' @param folded Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned. For the unfolded it is assumed that the genotype "0" represents the ancestral state in the data. (Default is unfolded (FALSE).)
+#' @param vcf_path Path to the VCF file.
+#' @param folded Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (default of 10,000 should be suitable for most use cases).
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
 #'
 #' @return Site frequency spectrum as a named vector
 #'
 #' @examples
-#' data("mys", package = "GenoPop")
-#' OneDimSFS(mys, folded = FALSE)
+#' vcf_path <- "path/to/your/vcf/file"
+#' sfs <- OneDimSFS(vcf_path, folded = FALSE)
 #'
 #' @export
 
-OneDimSFS <- function(object, folded = FALSE) {
-  # Extract the genotype matrix
-  sep <- object@sep_gt
-  imp <- object@imp_gt
-  # DEBUG
-  if (is.null(imp) || nrow(imp) == 0) {
-    message("No imputed Genotypes, using the original ones.")
-  } else {
-    message("Using imputed genotypes.")
-  }
-  genotype_matrix <- if (is.null(imp) || nrow(imp) == 0) sep else imp
+OneDimSFS <- function(vcf_path, folded = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+  # Batch mode processing
+  batch_results <- process_vcf_in_batches(vcf_path,
+                                          batch_size = batch_size,
+                                          threads = threads,
+                                          write_log = write_log,
+                                          logfile = logfile,
+                                          custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
+                                            sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
+                                            num_individuals <- ncol(sep_gt)
 
-  # Replace '.' with NA for missing data
-  genotype_matrix[genotype_matrix == "."] <- NA
+                                            # Initialize a vector to hold the site frequency spectrum for this batch
+                                            sfs_batch <- numeric(num_individuals + 1)
 
-  # Convert the entire matrix to numeric in a vectorized manner
-  genotype_matrix_numeric <- as.matrix(apply(genotype_matrix, c(1, 2), as.numeric))
+                                            # Iterate over the sites in the genotype matrix
+                                            for (i in 1:nrow(sep_gt)) {
+                                              site_data <- sep_gt[i, ]
+                                              valid_data <- site_data[!is.na(site_data)]  # Exclude missing data for this site
+                                              derived_count <- sum(as.numeric(valid_data))  # Count the number of derived alleles
 
-  # Number of chromsomes
-  num_individuals <- ncol(genotype_matrix)
+                                              # Calculate the minor allele count for folded SFS
+                                              allele_count <- if (folded) {
+                                                min(derived_count, length(valid_data) - derived_count)
+                                              } else {
+                                                derived_count
+                                              }
 
-  # Initialize a vector to hold the site frequency spectrum
-  sfs <- numeric(num_individuals + 1)  # frequencies from 0 to num_individuals
+                                              # Update the SFS for this batch
+                                              sfs_batch[allele_count] <- sfs_batch[allele_count] + 1
+                                            }
 
-  # Iterate over the sites in the genotype matrix
-  for (i in 1:nrow(genotype_matrix_numeric)) {
-    site_data <- genotype_matrix_numeric[i, ]
+                                            return(sfs_batch)
+                                          })
 
-    # Exclude missing data for this site
-    valid_data <- site_data[!is.na(site_data)]
-
-    # Count the number of derived alleles (assuming '1' is the derived state)
-    derived_count <- sum(valid_data)
-
-    # Calculate the minor allele count for folded SFS
-    if (folded) {
-      allele_count <- min(derived_count, length(valid_data) - derived_count)
-    } else {
-      allele_count <- derived_count
-    }
-
-    # Update the SFS
-    sfs[allele_count] <- sfs[allele_count] + 1
-  }
+  # Aggregate SFS values from all batches
+  total_sfs <- Reduce("+", lapply(batch_results, function(x) x))
 
   # Name the vector elements for clearer interpretation
-  names(sfs) <- 0:num_individuals
-  # For a folded SFS, remove the redundant second half of the vector (it only consist of zero's..)
+  names(total_sfs) <- 0:(length(total_sfs) - 1)
+
+  # For a folded SFS, remove the redundant second half of the vector
   if (folded) {
     # Determine the midpoint of the vector
-    midpoint <- ceiling((num_individuals + 1) / 2)
+    midpoint <- ceiling(length(total_sfs) / 2)
     # Keep only up to the midpoint (inclusive)
-    sfs <- sfs[1:midpoint]
+    total_sfs <- total_sfs[1:midpoint]
   }
 
-  return(sfs)
+  return(total_sfs)
 }
 
-### Change to work with process_vcf_in_batches ###
-#' TwoDimSFS
+
+#' Calculate Two-Dimensional Site Frequency Spectrum from VCF File
 #'
-#' Calculate a two-dimensional site frequency spectrum from a list of two GPvcfR objects.
+#' This function calculates a two-dimensional site frequency spectrum from a VCF file for two populations. It processes the file in batches for efficient memory usage.
+#' The user can decide between a folded or unfolded spectrum.
 #'
-#' @param object A GPvcfR object.
-#' @param pop_assignments A named vector. Elements are the population names and names are the individual name.
-#' @param folded Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned. (Default is unfolded (FALSE).)
+#' @param vcf_path Path to the VCF file.
+#' @param pop1_individuals Vector of individual names belonging to the first population.
+#' @param pop2_individuals Vector of individual names belonging to the second population.
+#' @param folded Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (default of 10,000 should be suitable for most use cases).
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
 #'
-#' @return Two-dimensional site frequency spectrum as a matrix
+#' @return Two-dimensional site frequency spectrum as a matrix.
 #'
 #' @examples
-#' mys1 <- c("8449", "8128", "8779")
-#' mys2 <- c("8816", "8823", "8157")
-#'
-#' individuals <- c(mys1, mys2)
-#' pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
-#' pop_assignments <- setNames(pop_names, individuals)
-#'
-#' data("mys", package = "GenoPop")
-#'
-#' TwoDimSFS(mys, pop_assignments, folded = TRUE)
+#' vcf_path <- "path/to/your/vcf/file"
+#' pop1_individuals <- c("8449", "8128", "8779")
+#' pop2_individuals <- c("8816", "8823", "8157")
+#' sfs_2d <- TwoDimSFS(vcf_path, pop1_individuals, pop2_individuals, folded = TRUE)
 #'
 #' @export
 
-TwoDimSFS <- function(object, pop_assignments, folded = FALSE) {
-  # Check for necessary components in the object
-  if (!all(c("sep_gt", "allele_freqs") %in% slotNames(object))) {
-    stop("The object does not have the necessary components.")
-  }
+TwoDimSFS <- function(vcf_path, pop1_individuals, pop2_individuals, folded = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+  # Batch mode processing
+  batch_results <- process_vcf_in_batches(vcf_path,
+                                          batch_size = batch_size,
+                                          threads = threads,
+                                          write_log = write_log,
+                                          logfile = logfile,
+                                          pop1_individuals = pop1_individuals,
+                                          pop2_individuals = pop2_individuals,
+                                          custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
+                                            # Separate populations
+                                            sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
+                                            genotype_matrix1 <- sep$pop1
+                                            genotype_matrix2 <- sep$pop2
 
-  # Separate the populations
-  separated_pops <- separateByPopulations(object, pop_assignments, rm_ref_alleles = FALSE)
-  pop1 <- separated_pops[[1]]
-  pop2 <- separated_pops[[2]]
+                                            genotype_matrix1[genotype_matrix1 == "."] <- NA
+                                            genotype_matrix2[genotype_matrix2 == "."] <- NA
 
-  # Extract the genotype matrices
-  sep1 <- pop1@sep_gt
-  imp1 <- pop1@imp_gt
-  genotype_matrix1 <- if (is.null(imp1) || nrow(imp1) == 0) sep1 else imp1
-  sep2 <- pop2@sep_gt
-  imp2 <- pop2@imp_gt
-  genotype_matrix2 <- if (is.null(imp2) || nrow(imp2) == 0) sep2 else imp2
+                                            # Initialize a matrix to hold the 2d site frequency spectrum for this batch
+                                            sfs_2d_batch <- matrix(0, nrow = length(pop1_individuals) * 2 + 1, ncol = length(pop2_individuals) * 2 + 1)
+                                            x <- c()
+                                            # Iterate over the sites in the genotype matrix
+                                            for (i in 1:nrow(genotype_matrix1)) {
+                                              site_data1 <- genotype_matrix1[i,]
+                                              site_data2 <- genotype_matrix2[i,]
 
-  # Extract the variant information
-  variant_info1 <- pop1@fix
-  variant_info2 <- pop2@fix
+                                              # Exclude missing data for this site
+                                              valid_data1 <- site_data1[!is.na(site_data1)]
+                                              valid_data2 <- site_data2[!is.na(site_data2)]
 
-  # Replace '.' with NA for missing data and convert to numeric
-  genotype_matrix1[genotype_matrix1 == "."] <- NA
-  genotype_matrix1 <- as.matrix(apply(genotype_matrix1, c(1, 2), as.numeric))
+                                              # Count the number of derived alleles (assuming '1' is the derived state)
+                                              derived_count1 <- sum(as.numeric(valid_data1))
+                                              derived_count2 <- sum(as.numeric(valid_data2))
 
-  genotype_matrix2[genotype_matrix2 == "."] <- NA
-  genotype_matrix2 <- as.matrix(apply(genotype_matrix2, c(1, 2), as.numeric))
+                                              # Calculate the minor allele count for folded SFS
+                                              if (folded) {
+                                                allele_count1 <- min(derived_count1, length(valid_data1) - derived_count1)
+                                                allele_count2 <- min(derived_count2, length(valid_data2) - derived_count2)
+                                              } else {
+                                                allele_count1 <- derived_count1
+                                                allele_count2 <- derived_count2
+                                              }
+                                              # Update the 2dSFS
+                                              sfs_2d_batch[allele_count1, allele_count2] <- sfs_2d_batch[allele_count1, allele_count2] + 1
+                                            }
+                                            return(sfs_2d_batch)
+                                          })
 
-  # Create a unified set of variants based on chromosome and position
-  common_variants <- merge(variant_info1, variant_info2, by = c("CHROM", "POS"), all = TRUE)
+  # Aggregate 2dSFS values from all batches
+  total_sfs_2d <- Reduce("+", batch_results)
 
-  # Number of chromosomes
-  num_individuals1 <- ncol(genotype_matrix1)
-  num_individuals2 <- ncol(genotype_matrix2)
-
-  # Initialize a matrix to hold the 2d site frequency spectrum
-  sfs_2d <- matrix(0, nrow = num_individuals1 + 1, ncol = num_individuals2 + 1)
-
-  # Process each common variant
-  for (i in 1:nrow(common_variants)) {
-    chrom <- common_variants[i, "CHROM"]
-    pos <- common_variants[i, "POS"]
-
-    # Find the index of this variant in each dataset
-    idx1 <- which(variant_info1[,"CHROM"] == chrom & variant_info1[,"POS"] == pos)
-    idx2 <- which(variant_info2[,"CHROM"] == chrom & variant_info2[,"POS"] == pos)
-
-    # If the variant is missing in a dataset, we assume it's monomorphic there
-    site_data1 <- if (length(idx1) == 1) genotype_matrix1[idx1, ] else rep(0, 2 * num_individuals1)
-    site_data2 <- if (length(idx2) == 1) genotype_matrix2[idx2, ] else rep(0, 2 * num_individuals2)
-
-    # Exclude missing data for this site
-    valid_data1 <- site_data1[!is.na(site_data1)]
-    valid_data2 <- site_data2[!is.na(site_data2)]
-
-    # Count the number of derived alleles (assuming '1' is the derived state)
-    derived_count1 <- sum(valid_data1)
-    derived_count2 <- sum(valid_data2)
-
-    # Calculate the minor allele count for folded SFS
-    if (folded) {
-      allele_count1 <- min(derived_count1, length(valid_data1) - derived_count1)
-      allele_count2 <- min(derived_count2, length(valid_data2) - derived_count2)
-    } else {
-      allele_count1 <- derived_count1
-      allele_count2 <- derived_count2
-    }
-
-    # Update the 2dSFS
-    sfs_2d[allele_count1, allele_count2] <- sfs_2d[allele_count1, allele_count2] + 1
-  }
-
-  # If the SFS is folded, remove the empty categories.
+  # If the SFS is folded, remove the empty categories
   if (folded) {
-    sfs_2d <- sfs_2d[rowSums(sfs_2d[,-1]) != 0,]
-    sfs_2d <- sfs_2d[,colSums(sfs_2d[-1,]) != 0]
+    total_sfs_2d <- total_sfs_2d[rowSums(total_sfs_2d[,-1]) != 0,]
+    total_sfs_2d <- total_sfs_2d[,colSums(total_sfs_2d[-1,]) != 0]
   }
 
-  return(sfs_2d)
+  return(total_sfs_2d)
 }
+

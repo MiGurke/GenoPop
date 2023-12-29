@@ -255,7 +255,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
 #'
 #' @noRd
 
-process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_function, threads = 1, write_log = FALSE, logfile = "logfile.txt", pop1_individuals = NULL, pop2_individuals = NULL) {
+process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_function, threads = 1, write_log = FALSE, logfile = "logfile.txt", pop1_individuals = NULL, pop2_individuals = NULL, add_packages = NULL) {
   # Read the VCF header to extract chromosome information and individual names
   con <- gzfile(vcf_path, "r")
   on.exit(close(con))
@@ -275,15 +275,16 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
   }
   # Initialize variables for window coordinates
   window_coordinates <- list()
-
+  index <- 1
   # Generate window coordinates for each chromosome
   for (chrom in names(chrom_info)) {
     chrom_length <- chrom_info[[chrom]]
     start_pos <- 1
     while (start_pos < chrom_length) {
       end_pos <- min(start_pos + window_size - 1, chrom_length)
-      window_coordinates <- c(window_coordinates, paste0(chrom, ":", start_pos, "-", end_pos))
+      window_coordinates <- c(window_coordinates, paste0(index, "\t", chrom, "\t", start_pos, "\t", end_pos))
       start_pos <- start_pos + window_size + skip_size
+      index <- index + 1
     }
   }
 
@@ -314,14 +315,22 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
     }
     file.create(logfile)
   }
+
+  if (!is.null(add_packages)) {
+    packages = c("Rsamtools", "GenomicRanges", add_packages)
+  } else {
+    packages = c("Rsamtools", "GenomicRanges")
+  }
+
   # Process each window in parallel
-  results <- foreach(window_coord = window_coordinates, .packages = c("Rsamtools", "GenomicRanges")) %dopar% {
+  results <- foreach(window_coord = window_coordinates, .packages = packages) %do% {
     tryCatch({
       # Extract chromosome and positions from the batch coordinates
-      coords <- strsplit(window_coord, "[:-]")[[1]]
-      chrom <- coords[1]
-      start_pos <- as.numeric(coords[2])
-      end_pos <- as.numeric(coords[3])
+      coords <- strsplit(window_coord, "\t")[[1]]
+      index <- as.numeric(coords[1])
+      chrom <- coords[2]
+      start_pos <- as.numeric(coords[3])
+      end_pos <- as.numeric(coords[4])
 
       # Read the specific batch from the VCF file
       tbx <- TabixFile(vcf_path)
@@ -336,7 +345,6 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
         # Split each line of the batch data by tabs and create a matrix
         data_matrix <- do.call(rbind, strsplit(batch_data[[1]], "\t"))
         rm(batch_data)
-
         # Create a data frame from the matrix, selecting the relevant columns
         fix <- data.frame(
           CHROM = data_matrix[, 1],
@@ -357,7 +365,6 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
         # Assuming genotype data is in the 10th column onwards in VCF format
         gt_matrix <- data_matrix[biallelic_indices, 10:ncol(data_matrix)]
         rm(data_matrix)
-        print(head(gt_matrix))
 
         # Detect separators for alleles (commonly '/' or '|')
         allele_separators <- unique(gsub("[^/|]", "", gt_matrix))
@@ -376,9 +383,13 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
         sep_gt <- matrix(NA, nrow = nrow(gt_matrix), ncol = ploidy * ncol(gt_matrix))
 
         for (i in seq_len(nrow(gt_matrix))) {
+          # Check if there are multiple fields in the genotype data
+          if (any(grepl(":", gt_matrix[i, ]))) {
+            # Extract the GT part (assumes it's the first field)
+            gt_matrix[i, ] <- sapply(strsplit(gt_matrix[i, ], ":"), `[`, 1)
+          }
           # Separate alleles for each variant and assign to the matrix
-          sep_gt[i, ] <- strsplit(gt_matrix[i, ], separator)
-          #sep_gt[i, ] <- unlist(lapply(separated_gt, function(x) ifelse(length(x) < ploidy, rep(NA, ploidy), x)))
+          sep_gt[i, ] <- unlist(strsplit(gt_matrix[i, ], separator))
         }
 
         # Assign column names (e.g., "Sample1_1", "Sample1_2" for diploid)
@@ -388,7 +399,12 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
 
 
         # Apply the custom function to the batch data
-        process_result <- custom_function(fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals, pop2_individuals)
+        process_result <- custom_function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals, pop2_individuals)
+
+        if (write_log) {
+          log_progress(paste0(Sys.time(), " Completed window: ", window_coord, "\n"), logfile)
+        }
+        return(process_result)
 
       }
     }, error = function(e) {
@@ -398,11 +414,6 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
       }
       return(process_result <- NULL)  # Return NULL or some error indication
     })
-
-    if (write_log) {
-      log_progress(paste0(Sys.time(), " Completed window: ", window_coord, "\n"), logfile)
-    }
-    return(process_result)
   }
 
   # Clean up and return results
@@ -481,7 +492,7 @@ separateByPopulations <- function(sep_gt, pop1_names, pop2_names, ploidy = 2, rm
 
 calculateAlleleFreqs <- function(sep_gt) {
   allele_frequencies_per_site <- vector("list", length = nrow(sep_gt))
-  unique_alleles <- unique(as.vector(sep_gt))
+  unique_alleles <- unique(as.vector(sep_gt))[unique(as.vector(sep_gt)) != "."]
 
   # Calculate allele frequencies for each variant
   for (i in seq_len(nrow(sep_gt))) {
