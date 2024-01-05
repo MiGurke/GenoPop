@@ -17,6 +17,9 @@
 #'                   When specified, `skip_size` must also be provided.
 #' @param skip_size Number of base pairs to skip between windows (optional).
 #'                  Used in conjunction with `window_size` for windowed analysis.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return
 #' In batch mode (no window_size or skip_size provided): A single integer representing the total number of fixed sites for the alternative allele across the entire VCF file.
@@ -39,7 +42,7 @@
 #' @export
 
 
-FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL) {
+FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
   if (is.null(window_size) | is.null(skip_size)) {
     # Validate inputs for batch mode
     if (!is.null(window_size) || !is.null(skip_size)) {
@@ -52,6 +55,7 @@ FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.
                                             threads = threads,
                                             write_log = write_log,
                                             logfile = logfile,
+                                            exclude_ind = exclude_ind,
                                             custom_function = function(index, fix, sep_gt,pop1_individuals = NULL, pop2_individuals = NULL) {
                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
                                               # Count fixed sites for the alternative allele in this batch
@@ -98,6 +102,9 @@ FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.
 #'                   When specified, `skip_size` must also be provided.
 #' @param skip_size Number of base pairs to skip between windows (optional).
 #'                  Used in conjunction with `window_size` for windowed analysis.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return
 #' In batch mode (no window_size or skip_size provided): A single integer representing the total number of polymorphic sites across the entire VCF file.
@@ -114,7 +121,7 @@ FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.
 #'
 #' @export
 
-SegregatingSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL) {
+SegregatingSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
   if (is.null(window_size) || is.null(skip_size)) {
     # Validate inputs for batch mode
     if (!is.null(window_size) || !is.null(skip_size)) {
@@ -127,6 +134,7 @@ SegregatingSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile =
                                             threads = threads,
                                             write_log = write_log,
                                             logfile = logfile,
+                                            exclude_ind = exclude_ind,
                                             custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
                                               # Count polymorphic sites in this batch
@@ -175,6 +183,9 @@ SegregatingSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile =
 #'                   When specified, `skip_size` must also be provided.
 #' @param skip_size Number of base pairs to skip between windows (optional).
 #'                  Used in conjunction with `window_size` for windowed analysis.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return
 #' In batch mode (no window_size or skip_size provided): A single integer representing the total number of singleton sites across the entire VCF file.
@@ -191,7 +202,7 @@ SegregatingSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile =
 #'
 #' @export
 
-SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL) {
+SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
   if (is.null(window_size) || is.null(skip_size)) {
     # Validate inputs for batch mode
     if (!is.null(window_size) || !is.null(skip_size)) {
@@ -204,6 +215,7 @@ SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "
                                             threads = threads,
                                             write_log = write_log,
                                             logfile = logfile,
+                                            exclude_ind = exclude_ind,
                                             custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
                                               # Count singleton sites in this batch
@@ -254,6 +266,9 @@ SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "
 #'                   When specified, `skip_size` must also be provided.
 #' @param skip_size Number of base pairs to skip between windows (optional).
 #'                  Used in conjunction with `window_size` for windowed analysis.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return
 #' In batch mode (no window_size or skip_size provided): A list containing the number of private alleles for each population.
@@ -271,7 +286,7 @@ SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "
 #'
 #' @export
 
-PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL) {
+PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
 
   if (is.null(window_size) || is.null(skip_size)) {
     # Validate inputs for batch mode
@@ -286,6 +301,7 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
                                             logfile = logfile,
                                             pop1_individuals = pop1_individuals,
                                             pop2_individuals = pop2_individuals,
+                                            exclude_ind = exclude_ind,
                                             custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                               # Separate populations
                                               sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
@@ -365,6 +381,9 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
 #' @param threads Number of threads to use for parallel processing.
 #' @param write_log Logical, indicating whether to write progress logs.
 #' @param logfile Path to the log file where progress will be logged.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return Observed heterozygosity averaged over all loci.
 #'
@@ -374,13 +393,14 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
 #'
 #' @export
 
-ObservedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+ObservedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", exclude_ind = NULL) {
   # Batch mode processing
   batch_results <- process_vcf_in_batches(vcf_path,
                                           batch_size = batch_size,
                                           threads = threads,
                                           write_log = write_log,
                                           logfile = logfile,
+                                          exclude_ind = exclude_ind,
                                           custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                             # Replace '.' with NA for missing data
                                             sep_gt[sep_gt == "."] <- NA
@@ -420,6 +440,9 @@ ObservedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, wr
 #' @param threads Number of threads to use for parallel processing.
 #' @param write_log Logical, indicating whether to write progress logs.
 #' @param logfile Path to the log file where progress will be logged.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return Expected heterozygosity averaged over all loci.
 #'
@@ -429,13 +452,14 @@ ObservedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, wr
 #'
 #' @export
 
-ExpectedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+ExpectedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", exclude_ind = NULL) {
   # Batch mode processing
   batch_results <- process_vcf_in_batches(vcf_path,
                                           batch_size = batch_size,
                                           threads = threads,
                                           write_log = write_log,
                                           logfile = logfile,
+                                          exclude_ind = exclude_ind,
                                           custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                             # Calculate allele frequencies for this batch
                                             allele_freqs <- calculateAlleleFreqs(sep_gt)
@@ -470,6 +494,9 @@ ExpectedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, wr
 #' @param threads Number of threads to use for parallel processing.
 #' @param write_log Logical, indicating whether to write progress logs.
 #' @param logfile Path to the log file where progress will be logged.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return Nucleotide diversity (Pi) across the sequence.
 #'
@@ -480,13 +507,14 @@ ExpectedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, wr
 #'
 #' @export
 
-Pi <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+Pi <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", exclude_ind = NULL) {
   # Batch mode processing
   batch_results <- process_vcf_in_batches(vcf_path,
                                           batch_size = batch_size,
                                           threads = threads,
                                           write_log = write_log,
                                           logfile = logfile,
+                                          exclude_ind = exclude_ind,
                                           custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                             sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
                                             N_mismatches_batch <- as.numeric(0)
@@ -541,6 +569,9 @@ Pi <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log 
 #' @param threads Number of threads to use for parallel processing.
 #' @param write_log Logical, indicating whether to write progress logs.
 #' @param logfile Path to the log file where progress will be logged.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return Tajima's D value.
 #'
@@ -551,13 +582,14 @@ Pi <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log 
 #'
 #' @export
 
-TajimasD <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+TajimasD <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", exclude_ind = NULL) {
   # Batch mode processing
   batch_results <- process_vcf_in_batches(vcf_path,
                                           batch_size = batch_size,
                                           threads = threads,
                                           write_log = write_log,
                                           logfile = logfile,
+                                          exclude_ind = exclude_ind,
                                           custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                             sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
                                             num_chroms <- ncol(sep_gt)
@@ -641,6 +673,9 @@ TajimasD <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, writ
 #' @param threads Number of threads to use for parallel processing.
 #' @param write_log Logical, indicating whether to write progress logs.
 #' @param logfile Path to the log file where progress will be logged.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return Watterson's theta value normalized by the sequence length.
 #'
@@ -651,13 +686,14 @@ TajimasD <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, writ
 #'
 #' @export
 
-WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", exclude_ind = NULL) {
   # Batch mode processing
   batch_results <- process_vcf_in_batches(vcf_path,
                                           batch_size = batch_size,
                                           threads = threads,
                                           write_log = write_log,
                                           logfile = logfile,
+                                          exclude_ind = exclude_ind,
                                           custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                             sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
 
@@ -704,6 +740,9 @@ WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 
 #' @param threads Number of threads to use for parallel processing.
 #' @param write_log Logical, indicating whether to write progress logs.
 #' @param logfile Path to the log file where progress will be logged.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return The average number of nucleotide substitutions per site between the individuals of two populations (Dxy).
 #'
@@ -716,7 +755,7 @@ WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 
 #'
 #' @export
 
-Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", exclude_ind = NULL) {
   # Batch mode processing
   batch_results <- process_vcf_in_batches(vcf_path,
                                           batch_size = batch_size,
@@ -725,6 +764,7 @@ Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_
                                           logfile = logfile,
                                           pop1_individuals = pop1_individuals,
                                           pop2_individuals = pop2_individuals,
+                                          exclude_ind = exclude_ind,
                                           custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                             # Separate populations
                                             sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
@@ -784,6 +824,9 @@ Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_
 #' @param threads Number of threads to use for parallel processing.
 #' @param write_log Logical, indicating whether to write progress logs.
 #' @param logfile Path to the log file where progress will be logged.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return Fst value (either mean or weighted).
 #'
@@ -795,7 +838,7 @@ Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_
 #'
 #' @export
 
-Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", exclude_ind = NULL) {
   # Batch mode processing
   batch_results <- process_vcf_in_batches(vcf_path,
                                           batch_size = batch_size,
@@ -804,6 +847,7 @@ Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, 
                                           logfile = logfile,
                                           pop1_individuals = pop1_individuals,
                                           pop2_individuals = pop2_individuals,
+                                          exclude_ind = exclude_ind,
                                           custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                             # Separate populations
                                             sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
@@ -888,6 +932,9 @@ Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, 
 #' @param threads Number of threads to use for parallel processing.
 #' @param write_log Logical, indicating whether to write progress logs.
 #' @param logfile Path to the log file where progress will be logged.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return Site frequency spectrum as a named vector
 #'
@@ -897,13 +944,14 @@ Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, 
 #'
 #' @export
 
-OneDimSFS <- function(vcf_path, folded = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+OneDimSFS <- function(vcf_path, folded = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", exclude_ind = NULL) {
   # Batch mode processing
   batch_results <- process_vcf_in_batches(vcf_path,
                                           batch_size = batch_size,
                                           threads = threads,
                                           write_log = write_log,
                                           logfile = logfile,
+                                          exclude_ind = exclude_ind,
                                           custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                             sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
                                             num_individuals <- ncol(sep_gt)
@@ -963,6 +1011,9 @@ OneDimSFS <- function(vcf_path, folded = FALSE, batch_size = 10000, threads = 1,
 #' @param threads Number of threads to use for parallel processing.
 #' @param write_log Logical, indicating whether to write progress logs.
 #' @param logfile Path to the log file where progress will be logged.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return Two-dimensional site frequency spectrum as a matrix.
 #'
@@ -974,13 +1025,14 @@ OneDimSFS <- function(vcf_path, folded = FALSE, batch_size = 10000, threads = 1,
 #'
 #' @export
 
-TwoDimSFS <- function(vcf_path, pop1_individuals, pop2_individuals, folded = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt") {
+TwoDimSFS <- function(vcf_path, pop1_individuals, pop2_individuals, folded = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", exclude_ind = NULL) {
   # Batch mode processing
   batch_results <- process_vcf_in_batches(vcf_path,
                                           batch_size = batch_size,
                                           threads = threads,
                                           write_log = write_log,
                                           logfile = logfile,
+                                          exclude_ind = exclude_ind,
                                           pop1_individuals = pop1_individuals,
                                           pop2_individuals = pop2_individuals,
                                           custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {

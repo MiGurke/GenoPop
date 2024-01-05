@@ -2,23 +2,41 @@
 % Please edit documentation in R/pop_genomics.R
 \name{TajimasD}
 \alias{TajimasD}
-\title{Tajima's D}
+\title{Calculate Tajima's D from VCF File}
 \usage{
-TajimasD(object, seq_length)
+TajimasD(
+  vcf_path,
+  seq_length,
+  batch_size = 10000,
+  threads = 1,
+  write_log = FALSE,
+  logfile = "log.txt"
+)
 }
 \arguments{
-\item{object}{A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.}
+\item{vcf_path}{Path to the VCF file.}
 
-\item{seq_length}{Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.}
+\item{seq_length}{Total length of the sequence in number of bases.}
+
+\item{batch_size}{The number of variants to be processed in each batch
+(default of 10,000 should be suitable for most use cases).}
+
+\item{threads}{Number of threads to use for parallel processing.}
+
+\item{write_log}{Logical, indicating whether to write progress logs.}
+
+\item{logfile}{Path to the log file where progress will be logged.}
 }
 \value{
 Tajima's D value.
 }
 \description{
-Calculate Tajima's D statistic for a given dataset, a measure for neutrality.
+This function calculates Tajima's D statistic for a given dataset. It processes the file in batches for efficient memory usage.
+Tajima's D is a measure for neutrality based on the difference between the number of segregating sites and the average number of nucleotide differences.
 }
 \examples{
-data("mys", package = "GenoPop")
-TajimasD(mys, 265392)
+vcf_path <- "path/to/your/vcf/file"
+total_sequence_length <- 265392  # Total length of the sequence
+tajimas_d <- TajimasD(vcf_path, total_sequence_length)
 
 }

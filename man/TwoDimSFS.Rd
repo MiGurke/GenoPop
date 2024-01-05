@@ -2,33 +2,48 @@
 % Please edit documentation in R/pop_genomics.R
 \name{TwoDimSFS}
 \alias{TwoDimSFS}
-\title{TwoDimSFS}
+\title{Calculate Two-Dimensional Site Frequency Spectrum from VCF File}
 \usage{
-TwoDimSFS(object, pop_assignments, folded = FALSE)
+TwoDimSFS(
+  vcf_path,
+  pop1_individuals,
+  pop2_individuals,
+  folded = FALSE,
+  batch_size = 10000,
+  threads = 1,
+  write_log = FALSE,
+  logfile = "log.txt"
+)
 }
 \arguments{
-\item{object}{A GPvcfR object.}
+\item{vcf_path}{Path to the VCF file.}
 
-\item{pop_assignments}{A named vector. Elements are the population names and names are the individual name.}
+\item{pop1_individuals}{Vector of individual names belonging to the first population.}
 
-\item{folded}{Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned. (Default is unfolded (FALSE).)}
+\item{pop2_individuals}{Vector of individual names belonging to the second population.}
+
+\item{folded}{Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned.}
+
+\item{batch_size}{The number of variants to be processed in each batch
+(default of 10,000 should be suitable for most use cases).}
+
+\item{threads}{Number of threads to use for parallel processing.}
+
+\item{write_log}{Logical, indicating whether to write progress logs.}
+
+\item{logfile}{Path to the log file where progress will be logged.}
 }
 \value{
-Two-dimensional site frequency spectrum as a matrix
+Two-dimensional site frequency spectrum as a matrix.
 }
 \description{
-Calculate a two-dimensional site frequency spectrum from a list of two GPvcfR objects.
+This function calculates a two-dimensional site frequency spectrum from a VCF file for two populations. It processes the file in batches for efficient memory usage.
+The user can decide between a folded or unfolded spectrum.
 }
 \examples{
-mys1 <- c("8449", "8128", "8779")
-mys2 <- c("8816", "8823", "8157")
-
-individuals <- c(mys1, mys2)
-pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
-pop_assignments <- setNames(pop_names, individuals)
-
-data("mys", package = "GenoPop")
-
-TwoDimSFS(mys, pop_assignments, folded = TRUE)
+vcf_path <- "path/to/your/vcf/file"
+pop1_individuals <- c("8449", "8128", "8779")
+pop2_individuals <- c("8816", "8823", "8157")
+sfs_2d <- TwoDimSFS(vcf_path, pop1_individuals, pop2_individuals, folded = TRUE)
 
 }

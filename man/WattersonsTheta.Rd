@@ -2,23 +2,41 @@
 % Please edit documentation in R/pop_genomics.R
 \name{WattersonsTheta}
 \alias{WattersonsTheta}
-\title{WattersonsTheta}
+\title{Calculate Watterson's Theta from VCF File}
 \usage{
-WattersonsTheta(object, seq_length)
+WattersonsTheta(
+  vcf_path,
+  seq_length,
+  batch_size = 10000,
+  threads = 1,
+  write_log = FALSE,
+  logfile = "log.txt"
+)
 }
 \arguments{
-\item{object}{A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.}
+\item{vcf_path}{Path to the VCF file.}
 
 \item{seq_length}{The length of the sequence in the data set.}
+
+\item{batch_size}{The number of variants to be processed in each batch
+(default of 10,000 should be suitable for most use cases).}
+
+\item{threads}{Number of threads to use for parallel processing.}
+
+\item{write_log}{Logical, indicating whether to write progress logs.}
+
+\item{logfile}{Path to the log file where progress will be logged.}
 }
 \value{
-Watterson's theta value.
+Watterson's theta value normalized by the sequence length.
 }
 \description{
-Calculate Watterson's thea, a measure for neutrality, from an GPvcfR object. The metric will be normalized by the sequence length to make it comparable between data sets.
+This function calculates Watterson's Theta, a measure for neutrality, from a VCF file. It processes the file in batches for efficient memory usage.
+The metric will be normalized by the sequence length to make it comparable between datasets.
 }
 \examples{
-data("mys", package = "GenoPop")
-WattersonsTheta(mys, 265392)
+vcf_path <- "path/to/your/vcf/file"
+total_sequence_length <- 265392  # Total length of the sequence
+wattersons_theta <- WattersonsTheta(vcf_path, total_sequence_length)
 
 }

@@ -13,6 +13,9 @@
 #' @param threads The number of threads to use for parallel processing.
 #' @param write_log Logical, indicating whether to write progress logs.
 #' @param logfile The path to the log file.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @details The function divides the VCF file into batches based on the specified `batch_size`.
 #'          Each batch is processed to extract fixed information and genotype data, filter for
@@ -32,13 +35,13 @@
 #' @importFrom GenomicRanges GRanges
 #' @importFrom foreach foreach %dopar%
 #' @importFrom doParallel registerDoParallel
-#' @importFrom parallel detectCores makeCluster stopCluster
+#' @importFrom parallel detectCores makeCluster stopCluster clusterExport
 #' @importFrom missForest missForest
 #'
 #' @noRd
 
 
-process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, threads = 1, write_log = FALSE, logfile = "logfile.txt", pop1_individuals = NULL, pop2_individuals = NULL, add_packages = NULL) {
+process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, threads = 1, write_log = FALSE, logfile = "logfile.txt", pop1_individuals = NULL, pop2_individuals = NULL, add_packages = NULL,  exclude_ind = NULL) {
   tbx <- open(TabixFile(vcf_path, yieldSize=batch_size))
   # Initialize variables
   batch_coordinates <- list()
@@ -95,6 +98,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
   # Set up the parallel backend
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
+  clusterExport(cl, varlist = c("calculateAlleleFreqs", "separateByPopulations"))
 
   # Prepare log file if write_log is true
   #Create log file and prepare progress tracking if write log is true
@@ -122,7 +126,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
   }
 
   # Perform the calculations in parallel
-  results <- foreach(batch_coord = batch_coordinates, .packages = packages) %dopar% {
+  results <- foreach(batch_coord = batch_coordinates, .packages = packages) %do% {
     tryCatch({
       # Extract chromosome and positions from the batch coordinates
       coords <- strsplit(batch_coord, "\t")[[1]]
@@ -160,6 +164,16 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
       gt_matrix <- data_matrix[biallelic_indices, 10:ncol(data_matrix)]
       rm(data_matrix)
 
+      # Check if exclude_ind is provided and not NULL
+      ex_ind_names <- individual_names
+      if (!is.null(exclude_ind)) {
+        # Find columns (individuals) to exclude
+        cols_to_exclude <- which(individual_names %in% exclude_ind)
+        # Exclude the specified individuals from the genotype matrix
+        gt_matrix <- gt_matrix[, -cols_to_exclude, drop = FALSE]
+        ex_ind_names <- individual_names[-cols_to_exclude]
+      }
+
       # Detect separators for alleles (commonly '/' or '|')
       allele_separators <- unique(gsub("[^/|]", "", gt_matrix))
       separator <- allele_separators[1]  # Assuming consistent use of a single separator
@@ -187,8 +201,8 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
       }
 
       # Assign column names (e.g., "Sample1_1", "Sample1_2" for diploid)
-      colnames(sep_gt) <- paste(rep(individual_names, each = ploidy),
-                                rep(1:ploidy, times = length(individual_names)),
+      colnames(sep_gt) <- paste(rep(ex_ind_names, each = ploidy),
+                                rep(1:ploidy, times = length(ex_ind_names)),
                                 sep = "_")
 
       # Apply the custom function to the batch data
@@ -251,7 +265,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
 #' @importFrom GenomicRanges GRanges
 #' @importFrom foreach foreach %dopar%
 #' @importFrom doParallel registerDoParallel
-#' @importFrom parallel detectCores makeCluster stopCluster
+#' @importFrom parallel detectCores makeCluster stopCluster clusterExport
 #'
 #' @noRd
 
@@ -296,6 +310,7 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
   }
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
+  clusterExport(cl, varlist = c("calculateAlleleFreqs", "separateByPopulations"))
 
   # Prepare log file if write_log is true
   #Create log file and prepare progress tracking if write log is true
@@ -444,7 +459,7 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
 #'
 #' @keywords internal
 #'
-#' @noRd
+#' @export
 
 separateByPopulations <- function(sep_gt, pop1_names, pop2_names, ploidy = 2, rm_ref_alleles = TRUE) {
   # Check if all provided names are in the column names of sep_gt
@@ -488,7 +503,7 @@ separateByPopulations <- function(sep_gt, pop1_names, pop2_names, ploidy = 2, rm
 #'
 #' @keywords internal
 #'
-#' @noRd
+#' @export
 
 calculateAlleleFreqs <- function(sep_gt) {
   allele_frequencies_per_site <- vector("list", length = nrow(sep_gt))

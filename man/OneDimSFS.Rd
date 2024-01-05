@@ -2,23 +2,40 @@
 % Please edit documentation in R/pop_genomics.R
 \name{OneDimSFS}
 \alias{OneDimSFS}
-\title{OneDimSFS}
+\title{Calculate One Dimensional Site Frequency Spectrum from VCF File}
 \usage{
-OneDimSFS(object, folded = FALSE)
+OneDimSFS(
+  vcf_path,
+  folded = FALSE,
+  batch_size = 10000,
+  threads = 1,
+  write_log = FALSE,
+  logfile = "log.txt"
+)
 }
 \arguments{
-\item{object}{A S4 object of type GPvcfR. Allele frequencies and genotype matrix must be present.}
+\item{vcf_path}{Path to the VCF file.}
 
-\item{folded}{Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned. For the unfolded it is assumed that the genotype "0" represents the ancestral state in the data. (Default is unfolded (FALSE).)}
+\item{folded}{Logical, deciding if folded (TRUE) or unfolded (FALSE) SFS is returned.}
+
+\item{batch_size}{The number of variants to be processed in each batch
+(default of 10,000 should be suitable for most use cases).}
+
+\item{threads}{Number of threads to use for parallel processing.}
+
+\item{write_log}{Logical, indicating whether to write progress logs.}
+
+\item{logfile}{Path to the log file where progress will be logged.}
 }
 \value{
 Site frequency spectrum as a named vector
 }
 \description{
-Calculate a one dimensional site frequency spectrum from an GPvcfR object.
+This function calculates a one-dimensional site frequency spectrum from a VCF file. It processes the file in batches for efficient memory usage.
+The user can decide between a folded or unfolded spectrum.
 }
 \examples{
-data("mys", package = "GenoPop")
-OneDimSFS(mys, folded = FALSE)
+vcf_path <- "path/to/your/vcf/file"
+sfs <- OneDimSFS(vcf_path, folded = FALSE)
 
 }

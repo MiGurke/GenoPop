@@ -2,32 +2,48 @@
 % Please edit documentation in R/pop_genomics.R
 \name{Fst}
 \alias{Fst}
-\title{Fst}
+\title{Calculate Fst from VCF File}
 \usage{
-Fst(object, pop_assignments, weighted = FALSE)
+Fst(
+  vcf_path,
+  pop1_individuals,
+  pop2_individuals,
+  weighted = FALSE,
+  batch_size = 10000,
+  threads = 1,
+  write_log = FALSE,
+  logfile = "log.txt"
+)
 }
 \arguments{
-\item{object}{A GPvcfR object.}
+\item{vcf_path}{Path to the VCF file.}
 
-\item{pop_assignments}{A named vector. Elements are the population names and names are the individual name.}
+\item{pop1_individuals}{Vector of individual names belonging to the first population.}
 
-\item{weighted}{Logical, wether weighted Fst or mean Fst is returned. (Default = FALSE (mean Fst is returned))}
+\item{pop2_individuals}{Vector of individual names belonging to the second population.}
+
+\item{weighted}{Logical, whether weighted Fst or mean Fst is returned (Default = FALSE (mean Fst is returned)).}
+
+\item{batch_size}{The number of variants to be processed in each batch
+(default of 10,000 should be suitable for most use cases).}
+
+\item{threads}{Number of threads to use for parallel processing.}
+
+\item{write_log}{Logical, indicating whether to write progress logs.}
+
+\item{logfile}{Path to the log file where progress will be logged.}
 }
 \value{
-Fst value.
+Fst value (either mean or weighted).
 }
 \description{
-Calculate the mean or weighted (by number of non missing chromsomes) fixiation index (Fst) from two populations in a list of GPvcfR objects using the method of Weir and Cockerham (1984).
+This function calculates the fixation index (Fst) between two populations from a VCF file using the method of Weir and Cockerham (1984). It processes the file in batches for efficient memory usage.
+The result can be either the mean or weighted Fst based on the number of non-missing chromosomes.
 }
 \examples{
-mys1 <- c("8449", "8128", "8779")
-mys2 <- c("8816", "8823", "8157")
-
-individuals <- c(mys1, mys2)
-pop_names <- c(rep("mys1", length(mys1)), rep("mys2", length(mys2)))
-pop_assignments <- setNames(pop_names, individuals)
-
-data("mys", package = "GenoPop")
-Fst(mys, pop_assignments)
+vcf_path <- "path/to/your/vcf/file"
+pop1_individuals <- c("8449", "8128", "8779")
+pop2_individuals <- c("8816", "8823", "8157")
+fst_value <- Fst(vcf_path, pop1_individuals, pop2_individuals, weighted = TRUE)
 
 }

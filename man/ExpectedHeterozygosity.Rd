@@ -2,21 +2,37 @@
 % Please edit documentation in R/pop_genomics.R
 \name{ExpectedHeterozygosity}
 \alias{ExpectedHeterozygosity}
-\title{Expected Heterozygosity}
+\title{Calculate Expected Heterozygosity from VCF File}
 \usage{
-ExpectedHeterozygosity(object)
+ExpectedHeterozygosity(
+  vcf_path,
+  batch_size = 10000,
+  threads = 1,
+  write_log = FALSE,
+  logfile = "log.txt"
+)
 }
 \arguments{
-\item{object}{An S4 object of type GPvcfR. Allele frequencies must be present.}
+\item{vcf_path}{Path to the VCF file.}
+
+\item{batch_size}{The number of variants to be processed in each batch
+(default of 10,000 should be suitable for most use cases).}
+
+\item{threads}{Number of threads to use for parallel processing.}
+
+\item{write_log}{Logical, indicating whether to write progress logs.}
+
+\item{logfile}{Path to the log file where progress will be logged.}
 }
 \value{
-Expected heterozygosity.
+Expected heterozygosity averaged over all loci.
 }
 \description{
-This function calculates the expected heterozygosity of a population.
+This function calculates the expected heterozygosity (He) for each variant in a VCF file.
+It processes the file in batches for efficient memory usage.
 }
 \examples{
-data("mys", package = "GenoPop")
-ExpectedHeterozygosity(mys)
+vcf_path <- "path/to/your/vcf/file"
+He <- ExpectedHeterozygosity(vcf_path)
 
 }

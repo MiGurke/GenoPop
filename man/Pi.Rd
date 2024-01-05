@@ -2,27 +2,45 @@
 % Please edit documentation in R/pop_genomics.R
 \name{Pi}
 \alias{Pi}
-\title{Pi}
+\title{Calculate Nucleotide Diversity (Pi) from VCF File}
 \usage{
-Pi(object, seq_length)
+Pi(
+  vcf_path,
+  seq_length,
+  batch_size = 10000,
+  threads = 1,
+  write_log = FALSE,
+  logfile = "log.txt"
+)
 }
 \arguments{
-\item{object}{An S4 object of type GPvcfR.}
+\item{vcf_path}{Path to the VCF file.}
 
-\item{seq_length}{Length of the sequence in number of bases. Must be provided to accurately work with all monomorphic sites, including those monomorphic for the reference, which are generally not included in a vcf.}
+\item{seq_length}{Total length of the sequence in number of bases.}
+
+\item{batch_size}{The number of variants to be processed in each batch
+(default of 10,000 should be suitable for most use cases).}
+
+\item{threads}{Number of threads to use for parallel processing.}
+
+\item{write_log}{Logical, indicating whether to write progress logs.}
+
+\item{logfile}{Path to the log file where progress will be logged.}
 }
 \value{
-The nucleotide diversity (Pi).
+Nucleotide diversity (Pi) across the sequence.
 }
 \description{
-Calculate the average number of nucleotide differences per site between two sequences. Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
+This function calculates the nucleotide diversity (Pi) for a VCF file. Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
+It processes the file in batches for efficient memory usage and requires the overall sequence length.
 The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
 Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326), but for simplicity assuming that completely missing sites are invariant sites, which will underestimate Pi.
 Otherwise this would only function with VCF files that include all monomorphic sites, which may be unpractical given common data sets.
 If you happen to know the number of missing sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic sites as the sequence length to get the most accurate estimation of Pi.
 }
 \examples{
-data("mys", package = "GenoPop")
-Pi(mys, 265392)
+vcf_path <- "path/to/your/vcf/file"
+total_sequence_length <- 265392  # Total length of the sequence
+pi_value <- Pi(vcf_path, total_sequence_length)
 
 }
