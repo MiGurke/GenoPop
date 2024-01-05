@@ -126,7 +126,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
   }
 
   # Perform the calculations in parallel
-  results <- foreach(batch_coord = batch_coordinates, .packages = packages) %do% {
+  results <- foreach(batch_coord = batch_coordinates, .packages = packages) %dopar% {
     tryCatch({
       # Extract chromosome and positions from the batch coordinates
       coords <- strsplit(batch_coord, "\t")[[1]]
