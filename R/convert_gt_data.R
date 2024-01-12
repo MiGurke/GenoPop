@@ -41,7 +41,7 @@
 #' @noRd
 
 
-process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, threads = 1, write_log = FALSE, logfile = "logfile.txt", pop1_individuals = NULL, pop2_individuals = NULL, add_packages = NULL,  exclude_ind = NULL) {
+process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, threads = 1, write_log = FALSE, logfile = "logfile.txt", pop1_individuals = NULL, pop2_individuals = NULL, add_packages = NULL, exclude_ind = NULL) {
   tbx <- open(TabixFile(vcf_path, yieldSize=batch_size))
   # Initialize variables
   batch_coordinates <- list()
@@ -269,7 +269,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
 #'
 #' @noRd
 
-process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_function, threads = 1, write_log = FALSE, logfile = "logfile.txt", pop1_individuals = NULL, pop2_individuals = NULL, add_packages = NULL) {
+process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_function, threads = 1, write_log = FALSE, logfile = "logfile.txt", pop1_individuals = NULL, pop2_individuals = NULL, add_packages = NULL, exclude_ind = NULL) {
   # Read the VCF header to extract chromosome information and individual names
   con <- gzfile(vcf_path, "r")
   on.exit(close(con))
@@ -302,18 +302,19 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
     }
   }
 
-  # Set up parallel processing
+  # Determine the number of cores
   if (is.null(threads)) {
     num_cores <- detectCores() - 1  # Reserve one core for the system
   } else {
     num_cores <- threads
   }
+  # Set up the parallel backend
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
   clusterExport(cl, varlist = c("calculateAlleleFreqs", "separateByPopulations"))
 
   # Prepare log file if write_log is true
-  #Create log file and prepare progress tracking if write log is true
+  # Create log file and prepare progress tracking if write log is true
   if (write_log) {
     message(paste0("Preparing log file ", logfile))
     # Function to safely write to a log file
@@ -338,7 +339,7 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
   }
 
   # Process each window in parallel
-  results <- foreach(window_coord = window_coordinates, .packages = packages) %do% {
+  results <- foreach(window_coord = window_coordinates, .packages = packages) %dopar% {
     tryCatch({
       # Extract chromosome and positions from the batch coordinates
       coords <- strsplit(window_coord, "\t")[[1]]
@@ -360,6 +361,7 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
         # Split each line of the batch data by tabs and create a matrix
         data_matrix <- do.call(rbind, strsplit(batch_data[[1]], "\t"))
         rm(batch_data)
+
         # Create a data frame from the matrix, selecting the relevant columns
         fix <- data.frame(
           CHROM = data_matrix[, 1],
@@ -380,6 +382,16 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
         # Assuming genotype data is in the 10th column onwards in VCF format
         gt_matrix <- data_matrix[biallelic_indices, 10:ncol(data_matrix)]
         rm(data_matrix)
+
+        # Check if exclude_ind is provided and not NULL
+        ex_ind_names <- individual_names
+        if (!is.null(exclude_ind)) {
+          # Find columns (individuals) to exclude
+          cols_to_exclude <- which(individual_names %in% exclude_ind)
+          # Exclude the specified individuals from the genotype matrix
+          gt_matrix <- gt_matrix[, -cols_to_exclude, drop = FALSE]
+          ex_ind_names <- individual_names[-cols_to_exclude]
+        }
 
         # Detect separators for alleles (commonly '/' or '|')
         allele_separators <- unique(gsub("[^/|]", "", gt_matrix))
@@ -408,8 +420,8 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
         }
 
         # Assign column names (e.g., "Sample1_1", "Sample1_2" for diploid)
-        colnames(sep_gt) <- paste(rep(individual_names, each = ploidy),
-                                  rep(1:ploidy, times = length(individual_names)),
+        colnames(sep_gt) <- paste(rep(ex_ind_names, each = ploidy),
+                                  rep(1:ploidy, times = length(ex_ind_names)),
                                   sep = "_")
 
 
@@ -417,7 +429,7 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
         process_result <- custom_function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals, pop2_individuals)
 
         if (write_log) {
-          log_progress(paste0(Sys.time(), " Completed window: ", window_coord, "\n"), logfile)
+          log_progress(paste0(Sys.time(), " Completed window ", index, ": ", chrom, ":", start_pos, "-", end_pos, "\n"), logfile)
         }
         return(process_result)
 
@@ -425,9 +437,9 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
     }, error = function(e) {
       # Return or log the error information
       if (write_log) {
-        log_progress(paste0(Sys.time(), " Error in window: ", window_coord, " Error: ", e$message, "\n"), logfile)
+        log_progress(paste0(Sys.time(), " Error in window ", index, ": ", chrom, ":", start_pos, "-", end_pos," Error: ", e$message, "\n"), logfile)
       }
-      return(process_result <- NULL)  # Return NULL or some error indication
+      return(NULL)  # Return NULL or some error indication
     })
   }
 
@@ -507,7 +519,7 @@ separateByPopulations <- function(sep_gt, pop1_names, pop2_names, ploidy = 2, rm
 
 calculateAlleleFreqs <- function(sep_gt) {
   allele_frequencies_per_site <- vector("list", length = nrow(sep_gt))
-  unique_alleles <- unique(as.vector(sep_gt))[unique(as.vector(sep_gt)) != "."]
+  unique_alleles <- c("0", "1")
 
   # Calculate allele frequencies for each variant
   for (i in seq_len(nrow(sep_gt))) {

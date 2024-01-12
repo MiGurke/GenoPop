@@ -295,7 +295,6 @@ kNNImputation <- function(sep_gt, k = 3, chunk_size = 1000, threads = NULL, writ
   return(imputed_matrix)
 }
 
-### Change to work with process_vcf_in_batches and write new vcf ###
 #' rfImputation
 #'
 #' Missing data imputation using the random forest algorithm implemented in missForest R package. Computation is parallelized. Imputation is done in chunks of SNP's though the genome. The size of the chunks needs to be chosen carefully, as larger chunks may give more accuracy to an extend (assuming that region very far apart in the genome are likely not neighbors any way, because they should be more different from closer regions), but will increase computation demand drastically. *I will carry out some more formal tests on this algortihm soon and will include more information about this here soon.* If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
