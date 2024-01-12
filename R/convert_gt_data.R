@@ -98,7 +98,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
   # Set up the parallel backend
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
-  clusterExport(cl, varlist = c("calculateAlleleFreqs", "separateByPopulations"))
+  clusterExport(cl, varlist = c("calculateAlleleFreqs", "separateByPopulations", "knn_impute"))
 
   # Prepare log file if write_log is true
   #Create log file and prepare progress tracking if write log is true

@@ -4,12 +4,20 @@
 \alias{meanImputation}
 \title{meanImputation}
 \usage{
-meanImputation(sep_gt, mode = "variant")
+meanImputation(
+  vcf_path,
+  output_vcf,
+  batch_size = 10000,
+  threads = 1,
+  write_log = FALSE,
+  logfile = "log.txt",
+  mode = "variant"
+)
 }
 \arguments{
-\item{sep_gt}{separated genotype matrix from myvcfR object.}
+\item{mode}{Means are calculated either by "variant" or by "individual". (Default: "variant")}
 
-\item{mode}{Means are calculated either yb "variant" or by "individual".}
+\item{sep_gt}{separated genotype matrix from myvcfR object.}
 }
 \value{
 Matrix with imputed missing data.

@@ -10,7 +10,8 @@ OneDimSFS(
   batch_size = 10000,
   threads = 1,
   write_log = FALSE,
-  logfile = "log.txt"
+  logfile = "log.txt",
+  exclude_ind = NULL
 )
 }
 \arguments{
@@ -26,6 +27,10 @@ OneDimSFS(
 \item{write_log}{Logical, indicating whether to write progress logs.}
 
 \item{logfile}{Path to the log file where progress will be logged.}
+
+\item{exclude_ind}{Optional vector of individual IDs to exclude from the analysis.
+If provided, the function will remove these individuals from the genotype matrix
+before applying the custom function. Default is NULL, meaning no individuals are excluded.}
 }
 \value{
 Site frequency spectrum as a named vector

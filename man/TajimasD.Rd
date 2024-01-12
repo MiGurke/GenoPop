@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{TajimasD}
 \alias{TajimasD}
-\title{Calculate Tajima's D from VCF File}
+\title{Calculate Tajima's D from VCF File in Batch or Window Mode}
 \usage{
 TajimasD(
   vcf_path,
@@ -10,33 +10,49 @@ TajimasD(
   batch_size = 10000,
   threads = 1,
   write_log = FALSE,
-  logfile = "log.txt"
+  logfile = "log.txt",
+  window_size = NULL,
+  skip_size = NULL,
+  exclude_ind = NULL
 )
 }
 \arguments{
 \item{vcf_path}{Path to the VCF file.}
 
-\item{seq_length}{Total length of the sequence in number of bases.}
+\item{seq_length}{Total length of the sequence in number of bases (used in batch mode only).}
 
 \item{batch_size}{The number of variants to be processed in each batch
-(default of 10,000 should be suitable for most use cases).}
+(used in batch mode only, default of 10,000 should be suitable for most use cases).}
 
 \item{threads}{Number of threads to use for parallel processing.}
 
 \item{write_log}{Logical, indicating whether to write progress logs.}
 
 \item{logfile}{Path to the log file where progress will be logged.}
+
+\item{window_size}{Size of the window for windowed analysis in base pairs (optional).
+When specified, \code{skip_size} must also be provided.}
+
+\item{skip_size}{Number of base pairs to skip between windows (optional).
+Used in conjunction with \code{window_size} for windowed analysis.}
+
+\item{exclude_ind}{Optional vector of individual IDs to exclude from the analysis.
+If provided, the function will remove these individuals from the genotype matrix
+before applying the custom function. Default is NULL, meaning no individuals are excluded.}
 }
 \value{
-Tajima's D value.
+In batch mode (no window_size or skip_size provided): Tajima's D value.
+In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'TajimasD', representing Tajima's D within each window.
 }
 \description{
-This function calculates Tajima's D statistic for a given dataset. It processes the file in batches for efficient memory usage.
-Tajima's D is a measure for neutrality based on the difference between the number of segregating sites and the average number of nucleotide differences.
+This function calculates Tajima's D statistic for a given dataset. It processes the file either in batches or specified windows across the genome for efficient memory usage.
 }
 \examples{
 vcf_path <- "path/to/your/vcf/file"
 total_sequence_length <- 265392  # Total length of the sequence
+# Batch mode example
 tajimas_d <- TajimasD(vcf_path, total_sequence_length)
+# Window mode example
+tajimas_d_windows <- TajimasD(vcf_path, seq_length = total_sequence_length, window_size = 100000, skip_size = 50000)
 
 }

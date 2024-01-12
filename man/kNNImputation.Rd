@@ -5,26 +5,27 @@
 \title{kNNImputation}
 \usage{
 kNNImputation(
-  sep_gt,
+  vcf_path,
+  output_vcf,
   k = 3,
-  chunk_size = 1000,
-  threads = NULL,
+  batch_size = 1000,
+  threads = 1,
   write_log = FALSE,
   logfile = "logfile.txt"
 )
 }
 \arguments{
-\item{sep_gt}{A separated genotype matrix from a GPvcfR object.}
-
 \item{k}{Number of nearest neighbours used for imputation, default: 3.}
-
-\item{chunk_size}{Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.}
 
 \item{threads}{Number of threads used for the computation. Default is one less then available on the system.}
 
 \item{write_log}{Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.}
 
 \item{logfile}{Name of the log file, if write_log is true.}
+
+\item{sep_gt}{A separated genotype matrix from a GPvcfR object.}
+
+\item{chunk_size}{Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.}
 }
 \value{
 A separated genotype matrix from a GPvcfR object, but with imputed missing values.

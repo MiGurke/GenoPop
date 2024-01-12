@@ -11,20 +11,21 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // knn_impute
-NumericMatrix knn_impute(NumericMatrix data, int k);
-RcppExport SEXP _GenoPop_knn_impute(SEXP dataSEXP, SEXP kSEXP) {
+NumericMatrix knn_impute(NumericMatrix data, int k, int maxiter);
+RcppExport SEXP _GenoPop_knn_impute(SEXP dataSEXP, SEXP kSEXP, SEXP maxiterSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
     Rcpp::traits::input_parameter< int >::type k(kSEXP);
-    rcpp_result_gen = Rcpp::wrap(knn_impute(data, k));
+    Rcpp::traits::input_parameter< int >::type maxiter(maxiterSEXP);
+    rcpp_result_gen = Rcpp::wrap(knn_impute(data, k, maxiter));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_GenoPop_knn_impute", (DL_FUNC) &_GenoPop_knn_impute, 2},
+    {"_GenoPop_knn_impute", (DL_FUNC) &_GenoPop_knn_impute, 3},
     {NULL, NULL, 0}
 };
 

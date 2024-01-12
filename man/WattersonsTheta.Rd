@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{WattersonsTheta}
 \alias{WattersonsTheta}
-\title{Calculate Watterson's Theta from VCF File}
+\title{Calculate Watterson's Theta from VCF File in Batch or Window Mode}
 \usage{
 WattersonsTheta(
   vcf_path,
@@ -10,33 +10,49 @@ WattersonsTheta(
   batch_size = 10000,
   threads = 1,
   write_log = FALSE,
-  logfile = "log.txt"
+  logfile = "log.txt",
+  window_size = NULL,
+  skip_size = NULL,
+  exclude_ind = NULL
 )
 }
 \arguments{
 \item{vcf_path}{Path to the VCF file.}
 
-\item{seq_length}{The length of the sequence in the data set.}
+\item{seq_length}{The length of the sequence in the data set (used in batch mode only).}
 
 \item{batch_size}{The number of variants to be processed in each batch
-(default of 10,000 should be suitable for most use cases).}
+(used in batch mode only, default of 10,000 should be suitable for most use cases).}
 
 \item{threads}{Number of threads to use for parallel processing.}
 
 \item{write_log}{Logical, indicating whether to write progress logs.}
 
 \item{logfile}{Path to the log file where progress will be logged.}
+
+\item{window_size}{Size of the window for windowed analysis in base pairs (optional).
+When specified, \code{skip_size} must also be provided.}
+
+\item{skip_size}{Number of base pairs to skip between windows (optional).
+Used in conjunction with \code{window_size} for windowed analysis.}
+
+\item{exclude_ind}{Optional vector of individual IDs to exclude from the analysis.
+If provided, the function will remove these individuals from the genotype matrix
+before applying the custom function. Default is NULL, meaning no individuals are excluded.}
 }
 \value{
-Watterson's theta value normalized by the sequence length.
+In batch mode (no window_size or skip_size provided): Watterson's theta value normalized by the sequence length.
+In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'WattersonsTheta', representing Watterson's theta within each window normalized by the window length.
 }
 \description{
-This function calculates Watterson's Theta, a measure for neutrality, from a VCF file. It processes the file in batches for efficient memory usage.
-The metric will be normalized by the sequence length to make it comparable between datasets.
+This function calculates Watterson's Theta, a measure for neutrality, from a VCF file, processing the file either in batches or specified windows across the genome for efficient memory usage.
 }
 \examples{
 vcf_path <- "path/to/your/vcf/file"
 total_sequence_length <- 265392  # Total length of the sequence
+# Batch mode example
 wattersons_theta <- WattersonsTheta(vcf_path, total_sequence_length)
+# Window mode example
+wattersons_theta_windows <- WattersonsTheta(vcf_path, seq_length = total_sequence_length, window_size = 100000, skip_size = 50000)
 
 }

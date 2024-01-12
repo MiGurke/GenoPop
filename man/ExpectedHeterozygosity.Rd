@@ -2,37 +2,54 @@
 % Please edit documentation in R/pop_genomics.R
 \name{ExpectedHeterozygosity}
 \alias{ExpectedHeterozygosity}
-\title{Calculate Expected Heterozygosity from VCF File}
+\title{Calculate Expected Heterozygosity from VCF File in Batch or Window Mode}
 \usage{
 ExpectedHeterozygosity(
   vcf_path,
   batch_size = 10000,
   threads = 1,
   write_log = FALSE,
-  logfile = "log.txt"
+  logfile = "log.txt",
+  window_size = NULL,
+  skip_size = NULL,
+  exclude_ind = NULL
 )
 }
 \arguments{
 \item{vcf_path}{Path to the VCF file.}
 
 \item{batch_size}{The number of variants to be processed in each batch
-(default of 10,000 should be suitable for most use cases).}
+(used in batch mode only, default of 10,000 should be suitable for most use cases).}
 
 \item{threads}{Number of threads to use for parallel processing.}
 
 \item{write_log}{Logical, indicating whether to write progress logs.}
 
 \item{logfile}{Path to the log file where progress will be logged.}
+
+\item{window_size}{Size of the window for windowed analysis in base pairs (optional).
+When specified, \code{skip_size} must also be provided.}
+
+\item{skip_size}{Number of base pairs to skip between windows (optional).
+Used in conjunction with \code{window_size} for windowed analysis.}
+
+\item{exclude_ind}{Optional vector of individual IDs to exclude from the analysis.
+If provided, the function will remove these individuals from the genotype matrix
+before applying the custom function. Default is NULL, meaning no individuals are excluded.}
 }
 \value{
-Expected heterozygosity averaged over all loci.
+In batch mode (no window_size or skip_size provided): Expected heterozygosity averaged over all loci.
+In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'He', representing the expected heterozygosity within each window.
 }
 \description{
 This function calculates the expected heterozygosity (He) for each variant in a VCF file.
-It processes the file in batches for efficient memory usage.
+It processes the file either in batches or specified windows across the genome for efficient memory usage.
 }
 \examples{
 vcf_path <- "path/to/your/vcf/file"
+# Batch mode example
 He <- ExpectedHeterozygosity(vcf_path)
+# Window mode example
+He_windows <- ExpectedHeterozygosity(vcf_path, window_size = 100000, skip_size = 50000)
 
 }

@@ -11,7 +11,8 @@ FixedSites(
   logfile = "log.txt",
   batch_size = 10000,
   window_size = NULL,
-  skip_size = NULL
+  skip_size = NULL,
+  exclude_ind = NULL
 )
 }
 \arguments{
@@ -31,6 +32,10 @@ When specified, \code{skip_size} must also be provided.}
 
 \item{skip_size}{Number of base pairs to skip between windows (optional).
 Used in conjunction with \code{window_size} for windowed analysis.}
+
+\item{exclude_ind}{Optional vector of individual IDs to exclude from the analysis.
+If provided, the function will remove these individuals from the genotype matrix
+before applying the custom function. Default is NULL, meaning no individuals are excluded.}
 }
 \value{
 In batch mode (no window_size or skip_size provided): A single integer representing the total number of fixed sites for the alternative allele across the entire VCF file.

@@ -77,54 +77,56 @@ std::vector<int> find_k_neighbors(Rcpp::NumericMatrix data, int target_row, int 
 }
 
 // [[Rcpp::export]]
-NumericMatrix knn_impute(NumericMatrix data, int k) {
+NumericMatrix knn_impute(NumericMatrix data, int k, int maxiter) {
   int num_rows = data.nrow();
   int num_cols = data.ncol();
 
   NumericMatrix imputed_data(clone(data));
+  for(int m = 0; m < maxiter; ++m) {
+    bool any_na = false; // Flag to check if any NA values are left
 
-  for(int i = 0; i < num_rows; ++i) {
-    // Check if the row has any NA
-    bool row_has_na = false;
-    for(int j = 0; j < num_cols; ++j) {
-      if(R_IsNA(data(i, j))) {
-        row_has_na = true;
-        break;
+    for(int i = 0; i < num_rows; ++i) {
+      bool row_has_na = false;
+      for(int j = 0; j < num_cols; ++j) {
+        if(R_IsNA(imputed_data(i, j))) {
+          row_has_na = true;
+          any_na = true;
+          break;
+        }
       }
-    }
 
-    // If the row has NA, find its neighbors
-    std::vector<int> neighbors;
-    if(row_has_na) {
-      neighbors = find_k_neighbors(data, i, k);
-    }
+      if(row_has_na) {
+        std::vector<int> neighbors = find_k_neighbors(imputed_data, i, k);
 
-    // Perform the imputation
-    for(int j = 0; j < num_cols; ++j) {
-      if(R_IsNA(data(i, j))) {
-        double weighted_sum = 0.0;
-        double weight_total = 0.0;
-        for(int neighbor_idx : neighbors) {
-          if(!R_IsNA(data(neighbor_idx, j))) {
-            double weight = 1.0 / (calculate_distance(data.row(i), data.row(neighbor_idx)) + 1e-8);
-            weighted_sum += weight * data(neighbor_idx, j);
-            weight_total += weight;
+        for(int j = 0; j < num_cols; ++j) {
+          if(R_IsNA(imputed_data(i, j))) {
+            double weighted_sum = 0.0;
+            double weight_total = 0.0;
+            for(int neighbor_idx : neighbors) {
+              if(!R_IsNA(imputed_data(neighbor_idx, j))) {
+                double weight = 1.0 / (calculate_distance(imputed_data.row(i), imputed_data.row(neighbor_idx)) + 1e-8);
+                weighted_sum += weight * imputed_data(neighbor_idx, j);
+                weight_total += weight;
+              }
+            }
+            // Only impute if the neighbors actually had any data for this individual/allele/column.
+            // (Weight won't be increased from neighbours that have missing data at the position. See above.)
+            // If not its kinda pointless to impute this. This is the reason, why  this algorithm may not impute all missing values.
+            // Especially if there are individuals with high proportions of missing data.
+            if(weight_total > 0) {
+              imputed_data(i, j) = std::round(weighted_sum / weight_total);
+            }
           }
         }
-        // Only impute if the neighbors actually had any data for this individual/allele/column.
-        // (Weight won't be increased from neighbours that have missing data at the position. See above.)
-        // If not its kinda pointless to impute this. This is the reason, why  this algorithm may not impute all missing values.
-        // Especially if there are individuals with high proportions of missing data.
-        //if(weight_total > 0) {
-          imputed_data(i, j) = std::round(weighted_sum / weight_total);
-          Rcpp::Rcout << "At position " << i << " " << j << " imp value is " << std::round(weighted_sum / weight_total) << "\n";
-        // DEBUGGING
-        // } else {
-        //   Rcpp::Rcout << "Warning: No suitable neighbors found for imputation at (" << i << ", " << j << ").\n";
-        //}
       }
     }
+
+    // Break out of the loop if no NA values are left
+    if(!any_na) {
+      break;
+    }
   }
+
   return imputed_data;
 }
 

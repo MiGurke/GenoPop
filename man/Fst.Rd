@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{Fst}
 \alias{Fst}
-\title{Calculate Fst from VCF File}
+\title{Calculate Fst from VCF File in Batch or Window Mode}
 \usage{
 Fst(
   vcf_path,
@@ -12,7 +12,10 @@ Fst(
   batch_size = 10000,
   threads = 1,
   write_log = FALSE,
-  logfile = "log.txt"
+  logfile = "log.txt",
+  window_size = NULL,
+  skip_size = NULL,
+  exclude_ind = NULL
 )
 }
 \arguments{
@@ -25,25 +28,38 @@ Fst(
 \item{weighted}{Logical, whether weighted Fst or mean Fst is returned (Default = FALSE (mean Fst is returned)).}
 
 \item{batch_size}{The number of variants to be processed in each batch
-(default of 10,000 should be suitable for most use cases).}
+(used in batch mode only, default of 10,000 should be suitable for most use cases).}
 
 \item{threads}{Number of threads to use for parallel processing.}
 
 \item{write_log}{Logical, indicating whether to write progress logs.}
 
 \item{logfile}{Path to the log file where progress will be logged.}
+
+\item{window_size}{Size of the window for windowed analysis in base pairs (optional).
+When specified, \code{skip_size} must also be provided.}
+
+\item{skip_size}{Number of base pairs to skip between windows (optional).
+Used in conjunction with \code{window_size} for windowed analysis.}
+
+\item{exclude_ind}{Optional vector of individual IDs to exclude from the analysis.
+If provided, the function will remove these individuals from the genotype matrix
+before applying the custom function. Default is NULL, meaning no individuals are excluded.}
 }
 \value{
-Fst value (either mean or weighted).
+In batch mode (no window_size or skip_size provided): Fst value (either mean or weighted).
+In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'Fst', representing the fixation index within each window.
 }
 \description{
-This function calculates the fixation index (Fst) between two populations from a VCF file using the method of Weir and Cockerham (1984). It processes the file in batches for efficient memory usage.
-The result can be either the mean or weighted Fst based on the number of non-missing chromosomes.
+This function calculates the fixation index (Fst) between two populations from a VCF file using the method of Weir and Cockerham (1984), processing the file either in batches or specified windows across the genome for efficient memory usage.
 }
 \examples{
 vcf_path <- "path/to/your/vcf/file"
 pop1_individuals <- c("8449", "8128", "8779")
 pop2_individuals <- c("8816", "8823", "8157")
+# Batch mode example
 fst_value <- Fst(vcf_path, pop1_individuals, pop2_individuals, weighted = TRUE)
+# Window mode example
+fst_windows <- Fst(vcf_path, pop1_individuals, pop2_individuals, weighted = TRUE, window_size = 100000, skip_size = 50000)
 
 }
