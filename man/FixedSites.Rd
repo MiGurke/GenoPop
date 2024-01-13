@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{FixedSites}
 \alias{FixedSites}
-\title{Count Fixed Sites for Alternative Allele in VCF File}
+\title{FixedSites}
 \usage{
 FixedSites(
   vcf_path,

@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{TajimasD}
 \alias{TajimasD}
-\title{Calculate Tajima's D from VCF File in Batch or Window Mode}
+\title{TajimasD}
 \usage{
 TajimasD(
   vcf_path,
@@ -45,7 +45,12 @@ In batch mode (no window_size or skip_size provided): Tajima's D value.
 In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'TajimasD', representing Tajima's D within each window.
 }
 \description{
-This function calculates Tajima's D statistic for a given dataset. It processes the file either in batches or specified windows across the genome for efficient memory usage.
+This function calculates Tajima's D statistic for a given dataset (Tajima, 1989 (10.1093/genetics/123.3.585)).
+The formula used for this is equivalent to the one used in vcftools --TajimaD (https://vcftools.sourceforge.net/man_latest.html).
+The function calculates the number of monomorphic sites using the sequence length and the number of variants in the VCF file. This assumes, that all sites not present in the VCF file are invariant sites, which will underestimate Pi, because of commonly done (and necessary) variant filtering. However, otherwise this calculation would only work with VCF files that include all monomorphic sites, which is quite unpractical for common use cases and will increase computational demands significantly.
+If you happen to know the number of filtered our sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic (number of variants in your VCF) sites as the sequence length to get the most accurate estimation of Pi. (This does not work for the window mode of this function, which assumes the sequence length to be the window size.)
+For batch processing, it uses \code{process_vcf_in_batches}. For windowed analysis, it uses a similar
+approach tailored to process specific genomic windows (\code{process_vcf_in_windows}).
 }
 \examples{
 vcf_path <- "path/to/your/vcf/file"

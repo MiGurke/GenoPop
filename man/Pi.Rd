@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{Pi}
 \alias{Pi}
-\title{Calculate Nucleotide Diversity (Pi) from VCF File in Batch or Window Mode}
+\title{Pi}
 \usage{
 Pi(
   vcf_path,
@@ -45,12 +45,13 @@ In batch mode (no window_size or skip_size provided): Nucleotide diversity (Pi) 
 In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'Pi', representing the nucleotide diversity within each window.
 }
 \description{
-This function calculates the nucleotide diversity (Pi) for a VCF file.Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
-It processes the file in batches for efficient memory usage and requires the overall sequence length.
+This function calculates the nucleotide diversity (Pi) for a sample in a VCF file as defined by Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
 The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
-Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326), but for simplicity assuming that completely missing sites are invariant sites, which will underestimate Pi.
-Otherwise this would only function with VCF files that include all monomorphic sites, which may be unpractical given common data sets.
-If you happen to know the number of missing sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic sites as the sequence length to get the most accurate estimation of Pi.
+Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326).
+The function calculates the number of monomorphic sites using the sequence length and the number of variants in the VCF file. This assumes, that all sites not present in the VCF file are invariant sites, which will underestimate Pi, because of commonly done (and necessary) variant filtering. However, otherwise this calculation would only work with VCF files that include all monomorphic sites, which is quite unpractical for common use cases and will increase computational demands significantly.
+If you happen to know the number of filtered our sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic (number of variants in your VCF) sites as the sequence length to get the most accurate estimation of Pi. (This does not work for the window mode of this function, which assumes the sequence length to be the window size.)
+For batch processing, it uses \code{process_vcf_in_batches}. For windowed analysis, it uses a similar
+approach tailored to process specific genomic windows (\code{process_vcf_in_windows}).
 }
 \examples{
 vcf_path <- "path/to/your/vcf/file"

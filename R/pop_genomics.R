@@ -1,4 +1,4 @@
-#' Count Fixed Sites for Alternative Allele in VCF File
+#' FixedSites
 #'
 #' This function counts the number of sites fixed for the alternative allele ("1") in a VCF file.
 #' It processes the file in two modes: the entire file at once or in specified windows across the genome.
@@ -83,12 +83,12 @@ FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.
 }
 
 
-#' Count Segregating Sites in VCF File
+#' SegregatingSites
 #'
-#' This function counts the number of polymorphic sites (sites not fixed for the alternative allele)
+#' This function counts the number of polymorphic or segregating sites (sites not fixed for the alternative allele)
 #' in a VCF file. It processes the file in batches or specified windows across the genome.
 #' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
-#' approach tailored to process specific genomic windows.
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
 #' @param vcf_path Path to the VCF file.
 #' @param threads Number of threads to use for parallel processing.
@@ -164,12 +164,12 @@ SegregatingSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile =
 }
 
 
-#' Count Singleton Sites in VCF File
+#' SingletonSites
 #'
 #' This function counts the number of singleton sites (sites where a minor allele occurs only once in the sample)
 #' in a VCF file. It processes the file in batches or specified windows across the genome.
 #' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
-#' approach tailored to process specific genomic windows.
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
 #' @param vcf_path Path to the VCF file.
 #' @param threads Number of threads to use for parallel processing.
@@ -245,12 +245,12 @@ SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "
 }
 
 
-#' Count Private Alleles in VCF File
+#' PrivateAlleles
 #'
-#' This function calculates the number of private alleles in two populations from a VCF file.
+#' This function calculates the number of private alleles in two populations from a VCF file. (Alleles which are not present in the other popualtion.)
 #' It processes the file in batches or specified windows across the genome.
 #' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
-#' approach tailored to process specific genomic windows.
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
 #' @param vcf_path Path to the VCF file.
 #' @param pop1_individuals Vector of individual names belonging to the first population.
@@ -370,10 +370,11 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
 }
 
 
-#' Calculate Observed Heterozygosity from VCF File in Batch or Window Mode
+#' ObservedHeterozygosity
 #'
-#' This function calculates the observed heterozygosity (Ho) for each variant in a VCF file.
-#' It processes the file either in batches or specified windows across the genome for efficient memory usage.
+#' This function calculates the observed heterozygosity (Ho) for a sample in a VCF file. (The proportion of heterozygote genotypes.)
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
 #' @param vcf_path Path to the VCF file.
 #' @param batch_size The number of variants to be processed in each batch
@@ -473,10 +474,11 @@ ObservedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, wr
 }
 
 
-#' Calculate Expected Heterozygosity from VCF File in Batch or Window Mode
+#' ExpectedHeterozygosity
 #'
-#' This function calculates the expected heterozygosity (He) for each variant in a VCF file.
-#' It processes the file either in batches or specified windows across the genome for efficient memory usage.
+#' This function calculates the expected heterozygosity (He) for a sample in a vcf file. The expected heterozygosity is the proportion of heterozygote genotypes expected in the sample, given its allele frequencies, under Hardy-Weinberg Equilibrium.
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
 #' @param vcf_path Path to the VCF file.
 #' @param batch_size The number of variants to be processed in each batch
@@ -559,14 +561,15 @@ ExpectedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, wr
 }
 
 
-#' Calculate Nucleotide Diversity (Pi) from VCF File in Batch or Window Mode
+#' Pi
 #'
-#' This function calculates the nucleotide diversity (Pi) for a VCF file.Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
-#' It processes the file in batches for efficient memory usage and requires the overall sequence length.
+#' This function calculates the nucleotide diversity (Pi) for a sample in a VCF file as defined by Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
 #' The formula used for this is equivalent to the one used in vcftools --window-pi (https://vcftools.sourceforge.net/man_latest.html).
-#' Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326), but for simplicity assuming that completely missing sites are invariant sites, which will underestimate Pi.
-#' Otherwise this would only function with VCF files that include all monomorphic sites, which may be unpractical given common data sets.
-#' If you happen to know the number of missing sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic sites as the sequence length to get the most accurate estimation of Pi.
+#' Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326).
+#' The function calculates the number of monomorphic sites using the sequence length and the number of variants in the VCF file. This assumes, that all sites not present in the VCF file are invariant sites, which will underestimate Pi, because of commonly done (and necessary) variant filtering. However, otherwise this calculation would only work with VCF files that include all monomorphic sites, which is quite unpractical for common use cases and will increase computational demands significantly.
+#' If you happen to know the number of filtered our sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic (number of variants in your VCF) sites as the sequence length to get the most accurate estimation of Pi. (This does not work for the window mode of this function, which assumes the sequence length to be the window size.)
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
 #' @param vcf_path Path to the VCF file.
 #' @param seq_length Total length of the sequence in number of bases (used in batch mode only).
@@ -696,9 +699,14 @@ Pi <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log 
 }
 
 
-#' Calculate Tajima's D from VCF File in Batch or Window Mode
+#' TajimasD
 #'
-#' This function calculates Tajima's D statistic for a given dataset. It processes the file either in batches or specified windows across the genome for efficient memory usage.
+#' This function calculates Tajima's D statistic for a given dataset (Tajima, 1989 (10.1093/genetics/123.3.585)).
+#' The formula used for this is equivalent to the one used in vcftools --TajimaD (https://vcftools.sourceforge.net/man_latest.html).
+#' The function calculates the number of monomorphic sites using the sequence length and the number of variants in the VCF file. This assumes, that all sites not present in the VCF file are invariant sites, which will underestimate Pi, because of commonly done (and necessary) variant filtering. However, otherwise this calculation would only work with VCF files that include all monomorphic sites, which is quite unpractical for common use cases and will increase computational demands significantly.
+#' If you happen to know the number of filtered our sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic (number of variants in your VCF) sites as the sequence length to get the most accurate estimation of Pi. (This does not work for the window mode of this function, which assumes the sequence length to be the window size.)
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
 #' @param vcf_path Path to the VCF file.
 #' @param seq_length Total length of the sequence in number of bases (used in batch mode only).
@@ -877,9 +885,13 @@ TajimasD <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, writ
   }
 }
 
-#' Calculate Watterson's Theta from VCF File in Batch or Window Mode
+#' WattersonsTheta
 #'
-#' This function calculates Watterson's Theta, a measure for neutrality, from a VCF file, processing the file either in batches or specified windows across the genome for efficient memory usage.
+#' This function calculates Watterson's Theta, a measure for neutrality, from a VCF file (Watterson, 1975 (https://doi.org/10.1016/0040-5809(75)90020-9)).
+#' The function calculates the number of monomorphic sites using the sequence length and the number of variants in the VCF file. This assumes, that all sites not present in the VCF file are invariant sites, which will underestimate Pi, because of commonly done (and necessary) variant filtering. However, otherwise this calculation would only work with VCF files that include all monomorphic sites, which is quite unpractical for common use cases and will increase computational demands significantly.
+#' If you happen to know the number of filtered our sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic (number of variants in your VCF) sites as the sequence length to get the most accurate estimation of Pi. (This does not work for the window mode of this function, which assumes the sequence length to be the window size.)
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
 #' @param vcf_path Path to the VCF file.
 #' @param seq_length The length of the sequence in the data set (used in batch mode only).
@@ -989,9 +1001,14 @@ WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 
 }
 
 
-#' Calculate Average Nucleotide Differences (Dxy) from VCF File in Batch or Window Mode
+#' Dxy
 #'
-#' This function calculates the average number of nucleotide differences per site (Dxy) between two populations from a VCF file, processing the file either in batches or specified windows across the genome for efficient memory usage.
+#' This function calculates the average number of nucleotide differences per site (Dxy) between two populations from a VCF file (Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269)).
+#' Handling missing alleles at one site is equivalent to Korunes & Samuk, 2021 ( https://doi.org/10.1111/1755-0998.13326).
+#' The function calculates the number of monomorphic sites using the sequence length and the number of variants in the VCF file. This assumes, that all sites not present in the VCF file are invariant sites, which will underestimate Pi, because of commonly done (and necessary) variant filtering. However, otherwise this calculation would only work with VCF files that include all monomorphic sites, which is quite unpractical for common use cases and will increase computational demands significantly.
+#' If you happen to know the number of filtered our sites vs the number of monomorphic sites, please use the number of monomorphic + the number of polymorphic (number of variants in your VCF) sites as the sequence length to get the most accurate estimation of Pi. (This does not work for the window mode of this function, which assumes the sequence length to be the window size.)
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
 #' @param vcf_path Path to the VCF file.
 #' @param pop1_individuals Vector of individual names belonging to the first population.
@@ -1132,9 +1149,12 @@ Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_
 }
 
 
-#' Calculate Fst from VCF File in Batch or Window Mode
+#' Fst
 #'
-#' This function calculates the fixation index (Fst) between two populations from a VCF file using the method of Weir and Cockerham (1984), processing the file either in batches or specified windows across the genome for efficient memory usage.
+#' This function calculates the fixation index (Fst) between two populations from a VCF file using the method of Weir and Cockerham (1984).
+#' The formula used for this is equivalent to the one used in vcftools --weir-fst-pop (https://vcftools.sourceforge.net/man_latest.html).
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
 #' @param vcf_path Path to the VCF file.
 #' @param pop1_individuals Vector of individual names belonging to the first population.
@@ -1415,7 +1435,7 @@ Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, 
 }
 
 
-#' Calculate One Dimensional Site Frequency Spectrum from VCF File
+#' OneDimSFS
 #'
 #' This function calculates a one-dimensional site frequency spectrum from a VCF file. It processes the file in batches for efficient memory usage.
 #' The user can decide between a folded or unfolded spectrum.
@@ -1492,7 +1512,7 @@ OneDimSFS <- function(vcf_path, folded = FALSE, batch_size = 10000, threads = 1,
 }
 
 
-#' Calculate Two-Dimensional Site Frequency Spectrum from VCF File
+#' TwoDimSFS
 #'
 #' This function calculates a two-dimensional site frequency spectrum from a VCF file for two populations. It processes the file in batches for efficient memory usage.
 #' The user can decide between a folded or unfolded spectrum.

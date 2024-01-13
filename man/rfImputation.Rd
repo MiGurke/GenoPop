@@ -16,28 +16,36 @@ rfImputation(
 )
 }
 \arguments{
-\item{maxiter}{The number of improvement iterations the random forest algorithm (missForest) runs.}
+\item{vcf_path}{Path to the input VCF file.}
 
-\item{ntree}{The number of decision trees in the random forest.}
+\item{output_vcf}{Path for the output VCF file with imputed data.}
 
-\item{threads}{Number of threads used for the computation. Default is one less then available on the system.}
+\item{batch_size}{Number of variants to process per batch (default: 1000).}
 
-\item{write_log}{Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.}
+\item{maxiter}{Number of improvement iterations for the random forest algorithm (default: 10).}
 
-\item{logfile}{Name of the log file, if write_log is true.}
+\item{ntree}{Number of decision trees in the random forest (default: 100).}
 
-\item{sep_gt}{A separated genotype matrix from a myvcfR object.}
+\item{threads}{Number of threads used for computation (default: 1, or one less than available on the system).}
 
-\item{chunk_size}{Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.}
+\item{write_log}{If TRUE, writes a log file of the process (advised for large datasets).}
+
+\item{logfile}{Path to the log file, used if \code{write_log} is TRUE.}
 }
 \value{
-A separated genotype matrix from a myvcfR object, but with imputed missing values.
+Path to the output VCF file with imputed data.
 }
 \description{
-Missing data imputation using the random forest algorithm implemented in missForest R package. Computation is parallelized. Imputation is done in chunks of SNP's though the genome. The size of the chunks needs to be chosen carefully, as larger chunks may give more accuracy to an extend (assuming that region very far apart in the genome are likely not neighbors any way, because they should be more different from closer regions), but will increase computation demand drastically. \emph{I will carry out some more formal tests on this algortihm soon and will include more information about this here soon.} If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
+Performs imputation of missing genomic data using a random forest algorithm, optimized for large-scale VCF files. This function reads VCF files in batches, applies random forest imputation via the missForest package, and writes the results to a new VCF file. The choice of batch size, number of improvement iterations, and the number of decision trees in the random forest is critical for balancing accuracy and computational demand.
 }
 \examples{
-example_matrix <- matrix(c("0", "1", ".", "1", "1", ".", "0", "0", ".", "1", "1", ".", "0", "0", "0", "0", ".", "1", "0", "0", ".", "1", "1", ".", "0"), nrow = 5, byrow = TRUE)
-rfImputation(example_matrix, maxiter = 10, ntree = 100, chunk_size = 1000)
+rfImputation("/path/to/input.vcf",
+             "/path/to/output.vcf",
+             batch_size = 1000,
+             maxiter = 10,
+             ntree = 100,
+             threads = 5,
+             write_log = TRUE,
+             logfile = "/path/to/logfile.txt")
 
 }

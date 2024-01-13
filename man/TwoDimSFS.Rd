@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{TwoDimSFS}
 \alias{TwoDimSFS}
-\title{Calculate Two-Dimensional Site Frequency Spectrum from VCF File}
+\title{TwoDimSFS}
 \usage{
 TwoDimSFS(
   vcf_path,

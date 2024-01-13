@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{SegregatingSites}
 \alias{SegregatingSites}
-\title{Count Segregating Sites in VCF File}
+\title{SegregatingSites}
 \usage{
 SegregatingSites(
   vcf_path,
@@ -42,10 +42,10 @@ In batch mode (no window_size or skip_size provided): A single integer represent
 In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'PolymorphicSites', representing the count of polymorphic sites within each window.
 }
 \description{
-This function counts the number of polymorphic sites (sites not fixed for the alternative allele)
+This function counts the number of polymorphic or segregating sites (sites not fixed for the alternative allele)
 in a VCF file. It processes the file in batches or specified windows across the genome.
 For batch processing, it uses \code{process_vcf_in_batches}. For windowed analysis, it uses a similar
-approach tailored to process specific genomic windows.
+approach tailored to process specific genomic windows (\code{process_vcf_in_windows}).
 }
 \examples{
 # Batch mode example

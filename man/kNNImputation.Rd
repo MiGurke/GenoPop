@@ -7,7 +7,8 @@
 kNNImputation(
   vcf_path,
   output_vcf,
-  k = 3,
+  k = 10,
+  maxiter = 3,
   batch_size = 1000,
   threads = 1,
   write_log = FALSE,
@@ -15,25 +16,36 @@ kNNImputation(
 )
 }
 \arguments{
-\item{k}{Number of nearest neighbours used for imputation, default: 3.}
+\item{vcf_path}{Path to the input VCF file.}
 
-\item{threads}{Number of threads used for the computation. Default is one less then available on the system.}
+\item{output_vcf}{Path for the output VCF file with imputed data.}
 
-\item{write_log}{Logical, whether a log file of the process should be written to disk. This is adviced for imputing large data sets.}
+\item{k}{Number of nearest neighbors used for imputation (default: 10).}
 
-\item{logfile}{Name of the log file, if write_log is true.}
+\item{maxiter}{Maximum number of iterations for the kNN algorithm (default: 3).}
 
-\item{sep_gt}{A separated genotype matrix from a GPvcfR object.}
+\item{batch_size}{Number of variants to process per batch (default: 1000).}
 
-\item{chunk_size}{Number of variants analyzed in on batch in the parallelization. Default: 1000. Increasing this might improve accuracy, but will substantially increase running time.}
+\item{threads}{Number of threads used for computation (default: 1).}
+
+\item{write_log}{If TRUE, writes a log file of the process (advised for large datasets).}
+
+\item{logfile}{Path to the log file, used if \code{write_log} is TRUE.}
 }
 \value{
-A separated genotype matrix from a GPvcfR object, but with imputed missing values.
+Path to the output VCF file with imputed data.
 }
 \description{
-Function to execute the paralellized imputation of missing data using a k-nearest-neighbor algorithm. Imputation is done in chunks of SNP's though the genome. The size of the chunks needs to be chosen carefully, as larger chunks may give more accuracy to an extend (assuming that region very far apart in the genome are likely not neighbors any way, because they should be more different from closer regions), but will increase computation demand drastically. This implementation of the algorithm uses the annoy library (https://github.com/spotify/annoy) to detect the neighbors more efficiently. Neighboring SNP's with no data for the individual to be imputed, will be exculded. This can lead to some positions left missing, if there are individuals with large proportions of missing data. The number of neighbours k, also needs to be chosen wisely. Larger k's might give more accuracy but will also increase the computational needs, although not as drastically as for the chunk size. \emph{I will carry out some more formal tests on this algortihm soon and will include more information about this here soon.} If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
+Performs imputation of missing genomic data using a k-nearest-neighbor algorithm, optimized for large VCF files. This function reads VCF files in batches, applies kNN imputation, and writes the results to a new VCF file. It's designed for efficient processing through parallel computing and chunk-based handling of SNP data. The function uses the 'annoy' library for efficient neighbor detection. Note that neighboring SNPs lacking data will be excluded from the imputation process, and positions with large proportions of missing data may remain unimputed. The choice of batch size, number of neighbors (k), and the number of iterations (maxiter) is critical for balancing accuracy and computational demand.
 }
 \examples{
-example_matrix <- matrix(c("0", "1", ".", "1", "1", ".", "0", "0", ".", "1", "1", ".", "0", "0", "0", "0", ".", "1", "0", "0", ".", "1", "1", ".", "0"), nrow = 5, byrow = TRUE)
-kNNImputation(example_matrix, k = 3, chunk_size = 1000)
+kNNImputation("/path/to/input.vcf",
+              "/path/to/output.vcf",
+              k = 10,
+              maxiter = 3,
+              batch_size = 1000,
+              threads = 5,
+              write_log = TRUE,
+              logfile = "/path/to/logfile.txt")
+
 }

@@ -15,19 +15,36 @@ meanImputation(
 )
 }
 \arguments{
-\item{mode}{Means are calculated either by "variant" or by "individual". (Default: "variant")}
+\item{vcf_path}{Path to the input VCF file.}
 
-\item{sep_gt}{separated genotype matrix from myvcfR object.}
+\item{output_vcf}{Path for the output VCF file with imputed data.}
+
+\item{batch_size}{Number of variants to process per batch (default: 10000).}
+
+\item{threads}{Number of threads to use for parallel processing (default: 1).}
+
+\item{write_log}{If TRUE, writes a log of the imputation process (default: FALSE).}
+
+\item{logfile}{Path to the log file, used if \code{write_log} is TRUE.}
+
+\item{mode}{Method for calculating means, either "variant" or "individual" (default: "variant").}
 }
 \value{
-Matrix with imputed missing data.
+Path to the output VCF file with imputed data.
 }
 \description{
-Use the mean over each variant or individual to replace missing data with that mean. Mean is rounded to keep genotype integers, so this just corresponds to the most often occuring genotyp. If you want to use this algorithm on your data, please use the \code{\link{imputeMissingData}} function which will do the operation on GPvcfR object.
+Imputes missing data in VCF files using mean genotypes, either by variant or by individual. This function is designed for large-scale genomic datasets and utilizes efficient batch processing and parallel computing to handle VCF files directly. The function reads a VCF file in batches, performs mean imputation, and writes the imputed data to a new VCF file.
+}
+\details{
+The function operates in two modes: "variant" and "individual". In "variant" mode, it calculates the mean genotype for each variant across all individuals and replaces missing values with this mean. In "individual" mode, it calculates the mean genotype for each individual across all variants and replaces missing values with this mean. The means are rounded to maintain integer genotypes. The imputed data is written to a new VCF file, maintaining the original format.
 }
 \examples{
-example_matrix <- matrix(c("0", "1", ".", "1", "1", ".", "0", "0", ".", "1", "1", ".", "0", "0", "0", "0", ".", "1", "0", "0", ".", "1", "1", ".", "0"), nrow = 5, byrow = TRUE)
-meanImputation(example_matrix, mode ="variant")
-meanImputation(example_matrix, mode ="individual")
+meanImputation("/path/to/input.vcf",
+               "/path/to/output.vcf",
+               batch_size = 1000,
+               threads = 5,
+               write_log = TRUE,
+               logfile = "/path/to/logfile.txt",
+               mode = "variant")
 
 }

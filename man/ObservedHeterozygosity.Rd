@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{ObservedHeterozygosity}
 \alias{ObservedHeterozygosity}
-\title{Calculate Observed Heterozygosity from VCF File in Batch or Window Mode}
+\title{ObservedHeterozygosity}
 \usage{
 ObservedHeterozygosity(
   vcf_path,
@@ -42,8 +42,9 @@ In batch mode (no window_size or skip_size provided): Observed heterozygosity av
 In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'Ho', representing the observed heterozygosity within each window.
 }
 \description{
-This function calculates the observed heterozygosity (Ho) for each variant in a VCF file.
-It processes the file either in batches or specified windows across the genome for efficient memory usage.
+This function calculates the observed heterozygosity (Ho) for a sample in a VCF file. (The proportion of heterozygote genotypes.)
+For batch processing, it uses \code{process_vcf_in_batches}. For windowed analysis, it uses a similar
+approach tailored to process specific genomic windows (\code{process_vcf_in_windows}).
 }
 \examples{
 vcf_path <- "path/to/your/vcf/file"

@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{Fst}
 \alias{Fst}
-\title{Calculate Fst from VCF File in Batch or Window Mode}
+\title{Fst}
 \usage{
 Fst(
   vcf_path,
@@ -51,7 +51,10 @@ In batch mode (no window_size or skip_size provided): Fst value (either mean or 
 In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'Fst', representing the fixation index within each window.
 }
 \description{
-This function calculates the fixation index (Fst) between two populations from a VCF file using the method of Weir and Cockerham (1984), processing the file either in batches or specified windows across the genome for efficient memory usage.
+This function calculates the fixation index (Fst) between two populations from a VCF file using the method of Weir and Cockerham (1984).
+The formula used for this is equivalent to the one used in vcftools --weir-fst-pop (https://vcftools.sourceforge.net/man_latest.html).
+For batch processing, it uses \code{process_vcf_in_batches}. For windowed analysis, it uses a similar
+approach tailored to process specific genomic windows (\code{process_vcf_in_windows}).
 }
 \examples{
 vcf_path <- "path/to/your/vcf/file"

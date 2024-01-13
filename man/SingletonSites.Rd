@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{SingletonSites}
 \alias{SingletonSites}
-\title{Count Singleton Sites in VCF File}
+\title{SingletonSites}
 \usage{
 SingletonSites(
   vcf_path,
@@ -45,7 +45,7 @@ In window mode (window_size and skip_size provided): A data frame with columns '
 This function counts the number of singleton sites (sites where a minor allele occurs only once in the sample)
 in a VCF file. It processes the file in batches or specified windows across the genome.
 For batch processing, it uses \code{process_vcf_in_batches}. For windowed analysis, it uses a similar
-approach tailored to process specific genomic windows.
+approach tailored to process specific genomic windows (\code{process_vcf_in_windows}).
 }
 \examples{
 # Batch mode example

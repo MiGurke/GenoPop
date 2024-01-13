@@ -27,7 +27,7 @@ A list containing two data frames, one for each population.
 }
 \description{
 This function separates a genotype matrix into two data frames based on population assignments.
-It's designed to work with the batches processed by \code{process_vcf_in_batches}.
+It's designed to work with the batches or windows processed by \code{process_vcf_in_batches} and \code{process_vcf_in_windows}.
 }
 \examples{
 sep_gt <- matrix(...) # Example genotype matrix

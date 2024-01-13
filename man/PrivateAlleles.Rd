@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{PrivateAlleles}
 \alias{PrivateAlleles}
-\title{Count Private Alleles in VCF File}
+\title{PrivateAlleles}
 \usage{
 PrivateAlleles(
   vcf_path,
@@ -48,10 +48,10 @@ In batch mode (no window_size or skip_size provided): A list containing the numb
 In window mode (window_size and skip_size provided): A list of data frames, each with columns 'Chromosome', 'Start', 'End', 'PrivateAllelesPop1', and 'PrivateAllelesPop2', representing the count of private alleles within each window for each population.
 }
 \description{
-This function calculates the number of private alleles in two populations from a VCF file.
+This function calculates the number of private alleles in two populations from a VCF file. (Alleles which are not present in the other popualtion.)
 It processes the file in batches or specified windows across the genome.
 For batch processing, it uses \code{process_vcf_in_batches}. For windowed analysis, it uses a similar
-approach tailored to process specific genomic windows.
+approach tailored to process specific genomic windows (\code{process_vcf_in_windows}).
 }
 \examples{
 # Batch mode example

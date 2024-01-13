@@ -2,7 +2,7 @@
 % Please edit documentation in R/pop_genomics.R
 \name{OneDimSFS}
 \alias{OneDimSFS}
-\title{Calculate One Dimensional Site Frequency Spectrum from VCF File}
+\title{OneDimSFS}
 \usage{
 OneDimSFS(
   vcf_path,

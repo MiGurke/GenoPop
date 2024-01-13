@@ -452,7 +452,7 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
 #' Separate Genotype Matrix by Populations
 #'
 #' This function separates a genotype matrix into two data frames based on population assignments.
-#' It's designed to work with the batches processed by `process_vcf_in_batches`.
+#' It's designed to work with the batches or windows processed by `process_vcf_in_batches` and `process_vcf_in_windows`.
 #'
 #' @param sep_gt A genotype matrix similar to the `@sep_gt` slot of a `vcfR` object.
 #' @param pop1_names A character vector of individual names for the first population.
@@ -503,7 +503,7 @@ separateByPopulations <- function(sep_gt, pop1_names, pop2_names, ploidy = 2, rm
 #' Calculate Allele Frequencies from Genotype Matrix
 #'
 #' This function calculates allele frequencies from a genotype matrix (sep_gt) for each variant.
-#' It is designed to be used within the batch processing framework of `process_vcf_in_batches`.
+#' It is designed to be used within the batch or window processing framework of `process_vcf_in_batches` and `process_vcf_in_windows`.
 #'
 #' @param sep_gt Genotype matrix similar to the `@sep_gt` slot of a `vcfR` object.
 #'
