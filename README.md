@@ -88,7 +88,7 @@ In batch mode, the entire VCF file is processed at once to provide a general ove
 
 - **TwoDimSFS**: Calculates a two-dimensional site frequency spectrum for two populations. It's used to infer demographic history and population relationships.
 
-Please note that this summary provides an overview of the functions and  their purposes. For complete understanding and appropriate usage, refer  to the detailed documentation of GenoPop.
+Please note that this summary provides an overview of the functions and  their purposes. For complete understanding and appropriate usage, refer  to the detailed documentation of each function in GenoPop_man.pdf.
 
 ## Installation Instructions for GenoPop
 
