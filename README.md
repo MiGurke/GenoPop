@@ -2,7 +2,7 @@
 
 GenoPop is a R package designed to assist with population genomic analyses of data sets from non-model organisms or with low sequencing quality. It's created with the intention to simplify and streamline the analysis of large genomic datasets in VCF (Variant Call Format) files in a efficient manner, while handling problems of missing data. 
 
-The GenoPop can be divided into two parts. One part contains different genotype imputation methods to deal with missing data in the vcf file, and the second part contains several function to calculate commonly used population genomics metrics, like Fst, and Dxy.
+GenoPop can be divided into two parts. One part contains different genotype imputation methods to deal with missing data in the vcf file, and the second part contains several function to calculate commonly used population genomics metrics, like Fst, and Dxy.
 
 This document will give an overview about GenoPops functionalities and usability. Detailed documentation of all the functions can be viewed in R and are also in the GenoPop_man.pdf document.
 
