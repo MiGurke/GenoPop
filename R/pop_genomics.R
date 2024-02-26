@@ -70,6 +70,7 @@ FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.
                                             threads = threads,
                                             write_log = write_log,
                                             logfile = logfile,
+                                            exclude_ind = exclude_ind,
                                             custom_function = function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals = NULL, pop2_individuals = NULL) {
                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
                                               # Count fixed sites for the alternative allele in this batch
@@ -150,6 +151,7 @@ SegregatingSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile =
                                              threads = threads,
                                              write_log = write_log,
                                              logfile = logfile,
+                                             exclude_ind = exclude_ind,
                                              custom_function = function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals = NULL, pop2_individuals = NULL) {
                                                allele_freqs <- calculateAlleleFreqs(sep_gt)
                                                # Count polymorphic sites in this window
@@ -231,6 +233,7 @@ SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "
                                              threads = threads,
                                              write_log = write_log,
                                              logfile = logfile,
+                                             exclude_ind = exclude_ind,
                                              custom_function = function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals = NULL, pop2_individuals = NULL) {
                                                allele_freqs <- calculateAlleleFreqs(sep_gt)
                                                # Count singleton sites in this window
@@ -264,9 +267,6 @@ SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "
 #'                   When specified, `skip_size` must also be provided.
 #' @param skip_size Number of base pairs to skip between windows (optional).
 #'                  Used in conjunction with `window_size` for windowed analysis.
-#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
-#'        If provided, the function will remove these individuals from the genotype matrix
-#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return
 #' In batch mode (no window_size or skip_size provided): A list containing the number of private alleles for each population.
@@ -284,7 +284,7 @@ SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "
 #'
 #' @export
 
-PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
+PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads = 1, write_log = FALSE, logfile = "log.txt", batch_size = 10000, window_size = NULL, skip_size = NULL) {
 
   if (is.null(window_size) || is.null(skip_size)) {
     # Validate inputs for batch mode
@@ -299,7 +299,6 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
                                             logfile = logfile,
                                             pop1_individuals = pop1_individuals,
                                             pop2_individuals = pop2_individuals,
-                                            exclude_ind = exclude_ind,
                                             custom_function = function(index, fix, sep_gt, pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                               # Separate populations
                                               sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
@@ -449,6 +448,7 @@ ObservedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, wr
                                              threads = threads,
                                              write_log = write_log,
                                              logfile = logfile,
+                                             exclude_ind = exclude_ind,
                                              custom_function = function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals = NULL, pop2_individuals = NULL) {
                                                sep_gt[sep_gt == "."] <- NA
                                                num_individuals <- ncol(sep_gt) / 2  # assuming diploid organisms
@@ -543,6 +543,7 @@ ExpectedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, wr
                                              threads = threads,
                                              write_log = write_log,
                                              logfile = logfile,
+                                             exclude_ind = exclude_ind,
                                              custom_function = function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals = NULL, pop2_individuals = NULL) {
                                                allele_freqs <- calculateAlleleFreqs(sep_gt)
                                                He_per_locus <- apply(allele_freqs, 1, function(p) {
@@ -660,6 +661,7 @@ Pi <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log 
                                              threads = threads,
                                              write_log = write_log,
                                              logfile = logfile,
+                                             exclude_ind = exclude_ind,
                                              custom_function = function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals = NULL, pop2_individuals = NULL) {
                                                sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
                                                N_mismatches_batch <- as.numeric(0)
@@ -824,6 +826,7 @@ TajimasD <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, writ
                                              threads = threads,
                                              write_log = write_log,
                                              logfile = logfile,
+                                             exclude_ind = exclude_ind,
                                              custom_function = function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals = NULL, pop2_individuals = NULL) {
                                                sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
                                                num_chroms <- ncol(sep_gt)
@@ -970,6 +973,7 @@ WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 
                                              threads = threads,
                                              write_log = write_log,
                                              logfile = logfile,
+                                             exclude_ind = exclude_ind,
                                              custom_function = function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals = NULL, pop2_individuals = NULL) {
                                                sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
 
@@ -1023,9 +1027,6 @@ WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 
 #'                   When specified, `skip_size` must also be provided.
 #' @param skip_size Number of base pairs to skip between windows (optional).
 #'                  Used in conjunction with `window_size` for windowed analysis.
-#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
-#'        If provided, the function will remove these individuals from the genotype matrix
-#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return
 #' In batch mode (no window_size or skip_size provided): The average number of nucleotide substitutions per site between the individuals of two populations (Dxy).
@@ -1043,7 +1044,7 @@ WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 
 #'
 #' @export
 
-Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
+Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", window_size = NULL, skip_size = NULL) {
   if (is.null(window_size) || is.null(skip_size)) {
     # Validate inputs for batch mode
     if (!is.null(window_size) || !is.null(skip_size)) {
@@ -1057,7 +1058,6 @@ Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_
                                             logfile = logfile,
                                             pop1_individuals = pop1_individuals,
                                             pop2_individuals = pop2_individuals,
-                                            exclude_ind = exclude_ind,
                                             custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                               # Separate populations
                                               sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
@@ -1169,9 +1169,6 @@ Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_
 #'                   When specified, `skip_size` must also be provided.
 #' @param skip_size Number of base pairs to skip between windows (optional).
 #'                  Used in conjunction with `window_size` for windowed analysis.
-#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
-#'        If provided, the function will remove these individuals from the genotype matrix
-#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return
 #' In batch mode (no window_size or skip_size provided): Fst value (either mean or weighted).
@@ -1188,7 +1185,7 @@ Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_
 #'
 #' @export
 
-Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
+Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", window_size = NULL, skip_size = NULL) {
   if (is.null(window_size) || is.null(skip_size)) {
     # Validate inputs for batch mode
     if (!is.null(window_size) || !is.null(skip_size)) {
@@ -1202,7 +1199,6 @@ Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, 
                                             logfile = logfile,
                                             pop1_individuals = pop1_individuals,
                                             pop2_individuals = pop2_individuals,
-                                            exclude_ind = exclude_ind,
                                             custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                               # Separate populations
                                               sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
