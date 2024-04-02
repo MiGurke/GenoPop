@@ -205,6 +205,12 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
                                 rep(1:ploidy, times = length(ex_ind_names)),
                                 sep = "_")
 
+      # Removing rows now with only missing data or monomorphic
+      rows_to_remove <- apply(gt_matrix, 1, function(x) all(x == "./." | x == ".|." | x == "0/0" | x == "0|0"))
+      gt_matrix <- gt_matrix[!rows_to_remove, ]
+      sep_gt <- sep_gt[!rows_to_remove, ]
+      fix <- fix[!rows_to_remove, ]
+
       # Apply the custom function to the batch data
       process_result <- custom_function(index, fix, sep_gt, pop1_individuals, pop2_individuals)
 
@@ -391,6 +397,10 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
           # Exclude the specified individuals from the genotype matrix
           gt_matrix <- gt_matrix[, -cols_to_exclude, drop = FALSE]
           ex_ind_names <- individual_names[-cols_to_exclude]
+          # Removing rows with only missing data & monomorphics
+          rows_to_remove <- apply(gt_matrix, 1, function(x) all(x == "./." | x == ".|." | x == "0/0" | x == "0|0"))
+          gt_matrix <- gt_matrix[!rows_to_remove, ]
+          fix <- fix[!rows_to_remove, ]
         }
 
         # Detect separators for alleles (commonly '/' or '|')
@@ -424,6 +434,11 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
                                   rep(1:ploidy, times = length(ex_ind_names)),
                                   sep = "_")
 
+        # Removing rows now with only missing data or monomorphic
+        rows_to_remove <- apply(gt_matrix, 1, function(x) all(x == "./." | x == ".|." | x == "0/0" | x == "0|0"))
+        gt_matrix <- gt_matrix[!rows_to_remove, ]
+        sep_gt <- sep_gt[!rows_to_remove, ]
+        fix <- fix[!rows_to_remove, ]
 
         # Apply the custom function to the batch data
         process_result <- custom_function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals, pop2_individuals)
