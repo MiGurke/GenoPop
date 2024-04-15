@@ -98,7 +98,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
   # Set up the parallel backend
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
-  clusterExport(cl, varlist = c("calculateAlleleFreqs", "separateByPopulations", "knn_impute"))
+  clusterExport(cl, varlist = c("calculateAlleleFreqs", "separateByPopulations")#, "knn_impute"))
 
   # Prepare log file if write_log is true
   #Create log file and prepare progress tracking if write log is true
@@ -206,7 +206,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
                                 sep = "_")
 
       # Removing rows now with only missing data or monomorphic
-      rows_to_remove <- apply(gt_matrix, 1, function(x) all(x == "./." | x == ".|." | x == "0/0" | x == "0|0"))
+      rows_to_remove <- apply(gt_matrix, 1, function(x) all(x == "./." | x == ".|."))
       gt_matrix <- gt_matrix[!rows_to_remove, ]
       sep_gt <- sep_gt[!rows_to_remove, ]
       fix <- fix[!rows_to_remove, ]
@@ -397,10 +397,6 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
           # Exclude the specified individuals from the genotype matrix
           gt_matrix <- gt_matrix[, -cols_to_exclude, drop = FALSE]
           ex_ind_names <- individual_names[-cols_to_exclude]
-          # Removing rows with only missing data & monomorphics
-          rows_to_remove <- apply(gt_matrix, 1, function(x) all(x == "./." | x == ".|." | x == "0/0" | x == "0|0"))
-          gt_matrix <- gt_matrix[!rows_to_remove, ]
-          fix <- fix[!rows_to_remove, ]
         }
 
         # Detect separators for alleles (commonly '/' or '|')
@@ -435,7 +431,7 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
                                   sep = "_")
 
         # Removing rows now with only missing data or monomorphic
-        rows_to_remove <- apply(gt_matrix, 1, function(x) all(x == "./." | x == ".|." | x == "0/0" | x == "0|0"))
+        rows_to_remove <- apply(gt_matrix, 1, function(x) all(x == "./." | x == ".|."))
         gt_matrix <- gt_matrix[!rows_to_remove, ]
         sep_gt <- sep_gt[!rows_to_remove, ]
         fix <- fix[!rows_to_remove, ]
