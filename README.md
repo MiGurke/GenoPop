@@ -26,9 +26,7 @@ Each function in this part of GenoPop is designed to calculate specific populati
 
 - **PrivateAlleles**: Calculates the number of private alleles in two populations. Private alleles are present in one population but absent in another, providing insight into population differentiation.
 
-- **ObservedHeterozygosity (Ho)**: Calculates the observed heterozygosity for each variant. It's a measure of genetic diversity within a population.
-
-- **ExpectedHeterozygosity (He)**: Calculates the expected heterozygosity based on allele frequencies. It's a theoretical measure of how genetically diverse a population should be under random mating.
+- **Heterozygosity Rate**: Calculates the observed heterozygosity for each variant. It's a measure of genetic diversity within a population.
 
 - **NucleotideDiversity (Pi)**: Measures the average number of nucleotide differences per site between two sequences. It's a key indicator of genetic diversity within a population.
 
