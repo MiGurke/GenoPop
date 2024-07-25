@@ -56,11 +56,11 @@ The function has two modes of operation:
 }
 \examples{
 # Batch mode example
-vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-num_fixed_sites <- FixedSites(vcf_file)
+vcf_path <- "path/to/vcf/file"
+num_fixed_sites <- FixedSites(vcf_path, threads = 4, write_log = TRUE, logfile = "fixed_sites_log.txt")
 
 # Window mode example
-fixed_sites_df <- FixedSites(vcf_file, window_size = 100000, skip_size = 50000)
+vcf_path <- "path/to/vcf/file"
+fixed_sites_df <- FixedSites(vcf_path, threads = 4, write_log = TRUE, logfile = "windowed_fixed_sites_log.txt", window_size = 100000, skip_size = 50000)
 
 }

@@ -1,28 +1,27 @@
 Package: GenoPop
-Title: R Package for Genotype Imputation and Population Genomics
-Version: 0.1.0
+Title: GenoPop
+Version: 0.0.0.9000
 Authors@R: 
-    person(given = "Marie (Mick)", family = "Gurke", email = "margurke@gmail.com", role = c("aut", "cre"),
+    person("Marie (Mick)", "Gurke", , "margurke@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0001-9901-424X"))
-Description: The R package GenoPop can be used for reference panel free genotype imputation and calculation of populations genomic statistics efficiently from whole genome VCF files.
-License: GPL (>= 3)
+Description: Package to calclulate population genomics stats from vcf files imported by vcfR.
+License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.1
+RoxygenNote: 7.2.3
 biocViews:
 Imports:
     Rsamtools,
     GenomicRanges,
+    vcfR,
+    methods,
+    Rcpp,
     foreach,
     doParallel,
     parallel,
-    missForest,
-    IRanges
+    missForest
 Suggests: 
-    knitr,
-    rmarkdown,
-    testthat (>= 3.0.0),
+    testthat,
     withr
 LazyData: false
-Config/testthat/edition: 3
-VignetteBuilder: knitr
+LinkingTo: Rcpp

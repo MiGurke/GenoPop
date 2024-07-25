@@ -40,8 +40,7 @@ This function calculates a one-dimensional site frequency spectrum from a VCF fi
 The user can decide between a folded or unfolded spectrum.
 }
 \examples{
-vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-sfs <- OneDimSFS(vcf_file, folded = FALSE)
+vcf_path <- "path/to/your/vcf/file"
+sfs <- OneDimSFS(vcf_path, folded = FALSE)
 
 }

@@ -13,7 +13,8 @@ PrivateAlleles(
   logfile = "log.txt",
   batch_size = 10000,
   window_size = NULL,
-  skip_size = NULL
+  skip_size = NULL,
+  exclude_ind = NULL
 )
 }
 \arguments{
@@ -37,6 +38,10 @@ When specified, \code{skip_size} must also be provided.}
 
 \item{skip_size}{Number of base pairs to skip between windows (optional).
 Used in conjunction with \code{window_size} for windowed analysis.}
+
+\item{exclude_ind}{Optional vector of individual IDs to exclude from the analysis.
+If provided, the function will remove these individuals from the genotype matrix
+before applying the custom function. Default is NULL, meaning no individuals are excluded.}
 }
 \value{
 In batch mode (no window_size or skip_size provided): A list containing the number of private alleles for each population.
@@ -50,14 +55,12 @@ approach tailored to process specific genomic windows (\code{process_vcf_in_wind
 }
 \examples{
 # Batch mode example
-vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-pop1_individuals <- c("tsk_0", "tsk_1", "tsk_2")
-pop2_individuals <- c("tsk_3", "tsk_4", "tsk_5")
-private_alleles <- PrivateAlleles(vcf_file, pop1_individuals, pop2_individuals)
+vcf_path <- "path/to/vcf/file"
+pop1_individuals <- c("8449", "8128", "8779")
+pop2_individuals <- c("8816", "8823", "8157")
+private_alleles <- PrivateAlleles(vcf_path, pop1_individuals, pop2_individuals, threads = 4, write_log = TRUE, logfile = "private_alleles_log.txt")
 
 # Window mode example
-private_alleles_windows <- PrivateAlleles(vcf_file, pop1_individuals, pop2_individuals,
-                                          window_size = 100000, skip_size = 50000)
+private_alleles_windows <- PrivateAlleles(vcf_path, pop1_individuals, pop2_individuals, threads = 4, write_log = TRUE, logfile = "windowed_private_alleles_log.txt", window_size = 100000, skip_size = 50000)
 
 }

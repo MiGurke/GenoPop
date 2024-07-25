@@ -49,11 +49,11 @@ approach tailored to process specific genomic windows (\code{process_vcf_in_wind
 }
 \examples{
 # Batch mode example
-vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-num_polymorphic_sites <- SegregatingSites(vcf_file)
+vcf_path <- "path/to/vcf/file"
+num_polymorphic_sites <- SegregatingSites(vcf_path, threads = 4, write_log = TRUE, logfile = "polymorphic_sites_log.txt")
 
 # Window mode example
-polymorphic_sites_df <- SegregatingSites(vcf_file, window_size = 100000, skip_size = 50000)
+vcf_path <- "path/to/vcf/file"
+polymorphic_sites_df <- SegregatingSites(vcf_path, threads = 4, write_log = TRUE, logfile = "windowed_polymorphic_sites_log.txt", window_size = 100000, skip_size = 50000)
 
 }

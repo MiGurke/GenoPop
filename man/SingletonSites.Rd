@@ -49,12 +49,11 @@ approach tailored to process specific genomic windows (\code{process_vcf_in_wind
 }
 \examples{
 # Batch mode example
-vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-num_singleton_sites <- SingletonSites(vcf_file)
+vcf_path <- "path/to/vcf/file"
+num_singleton_sites <- SingletonSites(vcf_path, threads = 4, write_log = TRUE, logfile = "singleton_sites_log.txt")
 
 # Window mode example
 vcf_path <- "path/to/vcf/file"
-singleton_sites_df <- SingletonSites(vcf_file, window_size = 100000, skip_size = 50000)
+singleton_sites_df <- SingletonSites(vcf_path, threads = 4, write_log = TRUE, logfile = "windowed_singleton_sites_log.txt", window_size = 100000, skip_size = 50000)
 
 }

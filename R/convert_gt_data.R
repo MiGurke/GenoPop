@@ -3,7 +3,7 @@
 #' This function is designed for efficient internal processing of large VCF files.
 #' It reads the VCF file in batches, processes each batch in parallel, and applies a custom function
 #' to the processed data. It's optimized for performance with large genomic datasets and is not
-#' intended to be used directly by users.
+#' intended to be used directly by end users.
 #'
 #' @param vcf_path The path to the VCF file.
 #' @param batch_size The number of variants to be processed in each batch.
@@ -37,7 +37,6 @@
 #' @importFrom doParallel registerDoParallel
 #' @importFrom parallel detectCores makeCluster stopCluster clusterExport
 #' @importFrom missForest missForest
-#' @importFrom IRanges IRanges
 #'
 #' @noRd
 
@@ -47,7 +46,6 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
   # Initialize variables
   batch_coordinates <- list()
   index <- 1
-  batch_coord <- NULL
   while(length(res <- scanTabix(tbx)[[1]])) {
     # Get all chromosomes in the current batch
     chroms <- sapply(res, function(x) strsplit(x, "\t")[[1]][1])
@@ -66,7 +64,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
       end_pos <- last_variant_info[2]
 
       # Construct and store the genomic region for each chromosome segment
-      batch_coordinates <- c(batch_coordinates, paste0(index, "\t", chrom, "\t", start_pos, "\t", end_pos))
+    batch_coordinates <- c(batch_coordinates, paste0(index, "\t", chrom, "\t", start_pos, "\t", end_pos))
       index <- index + 1
     }
   }
@@ -100,7 +98,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
   # Set up the parallel backend
   cl <- makeCluster(num_cores)
   registerDoParallel(cl)
-  clusterExport(cl, varlist = c("calculateAlleleFreqs", "separateByPopulations"))
+  clusterExport(cl, varlist = c("calculateAlleleFreqs", "separateByPopulations"))#, "knn_impute"))
 
   # Prepare log file if write_log is true
   #Create log file and prepare progress tracking if write log is true
@@ -169,35 +167,11 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
       # Check if exclude_ind is provided and not NULL
       ex_ind_names <- individual_names
       if (!is.null(exclude_ind)) {
-        # Check for errors in individual names
-        if (length(which(!(exclude_ind %in% individual_names))) > 0) {
-          wrong <- which(!(exclude_ind %in% individual_names))
-          e <- simpleError(paste0("Individual name '", exclude_ind[wrong], "' not found in VCF file."))
-          stop(e)
-        }
         # Find columns (individuals) to exclude
         cols_to_exclude <- which(individual_names %in% exclude_ind)
         # Exclude the specified individuals from the genotype matrix
         gt_matrix <- gt_matrix[, -cols_to_exclude, drop = FALSE]
         ex_ind_names <- individual_names[-cols_to_exclude]
-      }
-
-      # If pop1 and pop2 individuals are given, also check them for errors
-      if (!is.null(pop1_individuals)) {
-        # Check for errors in individual names
-        if (length(which(!(pop1_individuals %in% individual_names))) > 0) {
-          wrong <- which(!(pop1_individuals %in% individual_names))
-          e <- simpleError(paste0("Individual name '", pop1_individuals[wrong], "' not found in VCF file."))
-          stop(e)
-        }
-      }
-      if (!is.null(pop2_individuals)) {
-        # Check for errors in individual names
-        if (length(which(!(pop2_individuals %in% individual_names))) > 0) {
-          wrong <- which(!(pop2_individuals %in% individual_names))
-          e <- simpleError(paste0("Individual name '", pop2_individuals[wrong], "' not found in VCF file."))
-          stop(e)
-        }
       }
 
       # Detect separators for alleles (commonly '/' or '|')
@@ -238,7 +212,7 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
       fix <- fix[!rows_to_remove, ]
 
       # Apply the custom function to the batch data
-      process_result <- custom_function(index, fix, sep_gt, pop1_individuals, pop2_individuals, ploidy)
+      process_result <- custom_function(index, fix, sep_gt, pop1_individuals, pop2_individuals)
 
       if (write_log) {
         log_progress(paste0(Sys.time(), " Completed batch ", index, ": ", chrom, ":", start_pos, "-", end_pos, "\n"), logfile)
@@ -298,7 +272,6 @@ process_vcf_in_batches <- function(vcf_path, batch_size, custom_function, thread
 #' @importFrom foreach foreach %dopar%
 #' @importFrom doParallel registerDoParallel
 #' @importFrom parallel detectCores makeCluster stopCluster clusterExport
-#' @importFrom IRanges IRanges
 #'
 #' @noRd
 
@@ -323,7 +296,6 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
   # Initialize variables for window coordinates
   window_coordinates <- list()
   index <- 1
-  window_coord <- NULL
   # Generate window coordinates for each chromosome
   for (chrom in names(chrom_info)) {
     chrom_length <- chrom_info[[chrom]]
@@ -420,30 +392,13 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
         # Check if exclude_ind is provided and not NULL
         ex_ind_names <- individual_names
         if (!is.null(exclude_ind)) {
-          # Check for errors in individual names
-          if (length(which(!(exclude_ind %in% individual_names))) > 0) {
-            wrong <- which(!(exclude_ind %in% individual_names))
-            e <- simpleError(paste0("Individuals names '", exclude_ind[wrong], "' not found in VCF file."))
-            stop(e)
-          }
+          # Find columns (individuals) to exclude
+          cols_to_exclude <- which(individual_names %in% exclude_ind)
+          # Exclude the specified individuals from the genotype matrix
+          gt_matrix <- gt_matrix[, -cols_to_exclude, drop = FALSE]
+          ex_ind_names <- individual_names[-cols_to_exclude]
         }
-        # If pop1 and pop2 individuals are given, also check them for errors
-        if (!is.null(pop1_individuals)) {
-          # Check for errors in individual names
-          if (length(which(!(pop1_individuals %in% individual_names))) > 0) {
-            wrong <- which(!(pop1_individuals %in% individual_names))
-            e <- simpleError(paste0("Individual name '", pop1_individuals[wrong], "' not found in VCF file."))
-            stop(e)
-          }
-        }
-        if (!is.null(pop2_individuals)) {
-          # Check for errors in individual names
-          if (length(which(!(pop2_individuals %in% individual_names))) > 0) {
-            wrong <- which(!(pop2_individuals %in% individual_names))
-            e <- simpleError(paste0("Individual name '", pop2_individuals[wrong], "' not found in VCF file."))
-            stop(e)
-          }
-        }
+
         # Detect separators for alleles (commonly '/' or '|')
         allele_separators <- unique(gsub("[^/|]", "", gt_matrix))
         separator <- allele_separators[1]  # Assuming consistent use of a single separator
@@ -518,11 +473,20 @@ process_vcf_in_windows <- function(vcf_path, window_size, skip_size, custom_func
 #'
 #' @return A list containing two data frames, one for each population.
 #'
+#' @examples
+#' sep_gt <- matrix(...) # Example genotype matrix
+#' pop1_names <- c("Individual1", "Individual2", ...)
+#' pop2_names <- c("Individual5", "Individual6", ...)
+#'
+#' separated_data <- separateByPopulations(sep_gt, pop1_names, pop2_names)
+#'
 #' @keywords internal
 #'
 #' @export
 
 separateByPopulations <- function(sep_gt, pop1_names, pop2_names, ploidy = 2, rm_ref_alleles = TRUE) {
+  # Check if all provided names are in the column names of sep_gt
+  all_names <- c(pop1_names, pop2_names)
 
   colnames1 <- paste(rep(pop1_names, each = ploidy),
                      rep(1:ploidy, times = length(pop1_names)),
@@ -530,6 +494,7 @@ separateByPopulations <- function(sep_gt, pop1_names, pop2_names, ploidy = 2, rm
   colnames2 <- paste(rep(pop2_names, each = ploidy),
                      rep(1:ploidy, times = length(pop2_names)),
                      sep = "_")
+
 
   # Create data frames for each population
   pop1_gt <- sep_gt[, colnames1, drop = FALSE]
@@ -554,6 +519,10 @@ separateByPopulations <- function(sep_gt, pop1_names, pop2_names, ploidy = 2, rm
 #' @param sep_gt Genotype matrix similar to the `@sep_gt` slot of a `vcfR` object.
 #'
 #' @return A data frame containing allele frequencies for each variant.
+#'
+#' @examples
+#' sep_gt <- ... # Obtain this from a batch processed by `process_vcf_in_batches`
+#' allele_freqs <- calculateAlleleFreqs(sep_gt)
 #'
 #' @keywords internal
 #'

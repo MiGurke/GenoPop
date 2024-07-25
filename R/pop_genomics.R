@@ -30,12 +30,12 @@
 #'
 #' @examples
 #' # Batch mode example
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' num_fixed_sites <- FixedSites(vcf_file)
+#' vcf_path <- "path/to/vcf/file"
+#' num_fixed_sites <- FixedSites(vcf_path, threads = 4, write_log = TRUE, logfile = "fixed_sites_log.txt")
 #'
 #' # Window mode example
-#' fixed_sites_df <- FixedSites(vcf_file, window_size = 100000, skip_size = 50000)
+#' vcf_path <- "path/to/vcf/file"
+#' fixed_sites_df <- FixedSites(vcf_path, threads = 4, write_log = TRUE, logfile = "windowed_fixed_sites_log.txt", window_size = 100000, skip_size = 50000)
 #'
 #' @export
 
@@ -54,7 +54,7 @@ FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.
                                             write_log = write_log,
                                             logfile = logfile,
                                             exclude_ind = exclude_ind,
-                                            custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL, ploidy = 2) {
+                                            custom_function = function(index, fix, sep_gt,pop1_individuals = NULL, pop2_individuals = NULL) {
                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
                                               # Count fixed sites for the alternative allele in this batch
                                               return(sum(apply(allele_freqs, 1, function(x) any(x[2] == 1))))
@@ -111,12 +111,12 @@ FixedSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "log.
 #'
 #' @examples
 #' # Batch mode example
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' num_polymorphic_sites <- SegregatingSites(vcf_file)
+#' vcf_path <- "path/to/vcf/file"
+#' num_polymorphic_sites <- SegregatingSites(vcf_path, threads = 4, write_log = TRUE, logfile = "polymorphic_sites_log.txt")
 #'
 #' # Window mode example
-#' polymorphic_sites_df <- SegregatingSites(vcf_file, window_size = 100000, skip_size = 50000)
+#' vcf_path <- "path/to/vcf/file"
+#' polymorphic_sites_df <- SegregatingSites(vcf_path, threads = 4, write_log = TRUE, logfile = "windowed_polymorphic_sites_log.txt", window_size = 100000, skip_size = 50000)
 #'
 #' @export
 
@@ -134,7 +134,7 @@ SegregatingSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile =
                                             write_log = write_log,
                                             logfile = logfile,
                                             exclude_ind = exclude_ind,
-                                            custom_function = function(index, fix, sep_gt,pop1_individuals = NULL, pop2_individuals = NULL, ploidy = 2) {
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
                                               # Count polymorphic sites in this batch
                                               return(sum(apply(allele_freqs, 1, function(x) !any(x == 1) && !all(x == 0))))
@@ -193,13 +193,12 @@ SegregatingSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile =
 #'
 #' @examples
 #' # Batch mode example
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' num_singleton_sites <- SingletonSites(vcf_file)
+#' vcf_path <- "path/to/vcf/file"
+#' num_singleton_sites <- SingletonSites(vcf_path, threads = 4, write_log = TRUE, logfile = "singleton_sites_log.txt")
 #'
 #' # Window mode example
 #' vcf_path <- "path/to/vcf/file"
-#' singleton_sites_df <- SingletonSites(vcf_file, window_size = 100000, skip_size = 50000)
+#' singleton_sites_df <- SingletonSites(vcf_path, threads = 4, write_log = TRUE, logfile = "windowed_singleton_sites_log.txt", window_size = 100000, skip_size = 50000)
 #'
 #' @export
 
@@ -217,7 +216,7 @@ SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "
                                             write_log = write_log,
                                             logfile = logfile,
                                             exclude_ind = exclude_ind,
-                                            custom_function = function(index, fix, sep_gt,pop1_individuals = NULL, pop2_individuals = NULL, ploidy = 2) {
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
                                               # Count singleton sites in this batch
                                               return(sum(apply(allele_freqs, 1, function(x) any((x == 1/length(x)) & (names(x) != "0")))))
@@ -275,15 +274,13 @@ SingletonSites <- function(vcf_path, threads = 1, write_log = FALSE, logfile = "
 #'
 #' @examples
 #' # Batch mode example
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' pop1_individuals <- c("tsk_0", "tsk_1", "tsk_2")
-#' pop2_individuals <- c("tsk_3", "tsk_4", "tsk_5")
-#' private_alleles <- PrivateAlleles(vcf_file, pop1_individuals, pop2_individuals)
+#' vcf_path <- "path/to/vcf/file"
+#' pop1_individuals <- c("8449", "8128", "8779")
+#' pop2_individuals <- c("8816", "8823", "8157")
+#' private_alleles <- PrivateAlleles(vcf_path, pop1_individuals, pop2_individuals, threads = 4, write_log = TRUE, logfile = "private_alleles_log.txt")
 #'
 #' # Window mode example
-#' private_alleles_windows <- PrivateAlleles(vcf_file, pop1_individuals, pop2_individuals,
-#'                                           window_size = 100000, skip_size = 50000)
+#' private_alleles_windows <- PrivateAlleles(vcf_path, pop1_individuals, pop2_individuals, threads = 4, write_log = TRUE, logfile = "windowed_private_alleles_log.txt", window_size = 100000, skip_size = 50000)
 #'
 #' @export
 
@@ -302,7 +299,7 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
                                             logfile = logfile,
                                             pop1_individuals = pop1_individuals,
                                             pop2_individuals = pop2_individuals,
-                                            custom_function = function(index, fix, sep_gt, pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals, ploidy = 2) {
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                               # Separate populations
                                               sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
                                               sep_pop1 <- sep$pop1
@@ -372,9 +369,9 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
 }
 
 
-#' Heterozygosity Rate
+#' ObservedHeterozygosity
 #'
-#' This function calculates the rate of heterozygosity for samples in a VCF file. (The proportion of heterozygote genotypes.)
+#' This function calculates the observed heterozygosity (Ho) for a sample in a VCF file. (The proportion of heterozygote genotypes.)
 #' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
 #' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
 #'
@@ -393,20 +390,19 @@ PrivateAlleles <- function(vcf_path, pop1_individuals, pop2_individuals, threads
 #'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
 #'
 #' @return
-#' In batch mode (no window_size or skip_size provided): Observed heterozygosity rate averaged over all loci.
-#' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'Ho', representing the observed heterozygosity rate within each window.
+#' In batch mode (no window_size or skip_size provided): Observed heterozygosity averaged over all loci.
+#' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'Ho', representing the observed heterozygosity within each window.
 #'
 #' @examples
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
+#' vcf_path <- "path/to/your/vcf/file"
 #' # Batch mode example
-#' Ho <- Heterozygosity(vcf_file)
+#' Ho <- ObservedHeterozygosity(vcf_path)
 #' # Window mode example
-#' Ho_windows <- Heterozygosity(vcf_file, window_size = 100000, skip_size = 50000)
+#' Ho_windows <- ObservedHeterozygosity(vcf_path, window_size = 100000, skip_size = 50000)
 #'
 #' @export
 
-Heterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
+ObservedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
   if (is.null(window_size) || is.null(skip_size)) {
     # Validate inputs for batch mode
     if (!is.null(window_size) || !is.null(skip_size)) {
@@ -419,7 +415,7 @@ Heterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log 
                                             write_log = write_log,
                                             logfile = logfile,
                                             exclude_ind = exclude_ind,
-                                            custom_function = function(index, fix, sep_gt,pop1_individuals = NULL, pop2_individuals = NULL, ploidy = 2) {
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                               # Replace '.' with NA for missing data
                                               sep_gt[sep_gt == "."] <- NA
                                               num_individuals <- ncol(sep_gt) / 2  # assuming diploid organisms
@@ -478,6 +474,94 @@ Heterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log 
 }
 
 
+#' ExpectedHeterozygosity
+#'
+#' This function calculates the expected heterozygosity (He) for a sample in a vcf file. The expected heterozygosity is the proportion of heterozygote genotypes expected in the sample, given its allele frequencies, under Hardy-Weinberg Equilibrium.
+#' For batch processing, it uses `process_vcf_in_batches`. For windowed analysis, it uses a similar
+#' approach tailored to process specific genomic windows (`process_vcf_in_windows`).
+#'
+#' @param vcf_path Path to the VCF file.
+#' @param batch_size The number of variants to be processed in each batch
+#'                  (used in batch mode only, default of 10,000 should be suitable for most use cases).
+#' @param threads Number of threads to use for parallel processing.
+#' @param write_log Logical, indicating whether to write progress logs.
+#' @param logfile Path to the log file where progress will be logged.
+#' @param window_size Size of the window for windowed analysis in base pairs (optional).
+#'                   When specified, `skip_size` must also be provided.
+#' @param skip_size Number of base pairs to skip between windows (optional).
+#'                  Used in conjunction with `window_size` for windowed analysis.
+#' @param exclude_ind Optional vector of individual IDs to exclude from the analysis.
+#'        If provided, the function will remove these individuals from the genotype matrix
+#'        before applying the custom function. Default is NULL, meaning no individuals are excluded.
+#'
+#' @return
+#' In batch mode (no window_size or skip_size provided): Expected heterozygosity averaged over all loci.
+#' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'He', representing the expected heterozygosity within each window.
+#'
+#' @examples
+#' vcf_path <- "path/to/your/vcf/file"
+#' # Batch mode example
+#' He <- ExpectedHeterozygosity(vcf_path)
+#' # Window mode example
+#' He_windows <- ExpectedHeterozygosity(vcf_path, window_size = 100000, skip_size = 50000)
+#'
+#' @export
+
+ExpectedHeterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
+  if (is.null(window_size) || is.null(skip_size)) {
+    # Validate inputs for batch mode
+    if (!is.null(window_size) || !is.null(skip_size)) {
+      stop("Both 'window_size' and 'skip_size' must be provided for window mode.")
+    }
+    # Batch mode processing
+    batch_results <- process_vcf_in_batches(vcf_path,
+                                            batch_size = batch_size,
+                                            threads = threads,
+                                            write_log = write_log,
+                                            logfile = logfile,
+                                            exclude_ind = exclude_ind,
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
+                                              # Calculate allele frequencies for this batch
+                                              allele_freqs <- calculateAlleleFreqs(sep_gt)
+                                              # Calculate expected heterozygosity per locus for this batch
+                                              He_per_locus <- apply(allele_freqs, 1, function(p) {
+                                                1 - sum(p^2)
+                                              })
+                                              return(He_per_locus)
+                                            })
+
+    # Combine the He per locus from all batches and calculate the mean
+    all_He_per_locus <- unlist(batch_results)
+    He <- mean(all_He_per_locus, na.rm = TRUE)
+
+    return(He)
+  } else {
+    # Window mode processing
+    window_results <- process_vcf_in_windows(vcf_path,
+                                             window_size = window_size,
+                                             skip_size = skip_size,
+                                             threads = threads,
+                                             write_log = write_log,
+                                             logfile = logfile,
+                                             exclude_ind = exclude_ind,
+                                             custom_function = function(index, fix, sep_gt, chrom, start_pos, end_pos, pop1_individuals = NULL, pop2_individuals = NULL) {
+                                               allele_freqs <- calculateAlleleFreqs(sep_gt)
+                                               He_per_locus <- apply(allele_freqs, 1, function(p) {
+                                                 1 - sum(p^2)
+                                               })
+
+                                               He <- mean(He_per_locus, na.rm = TRUE)
+                                               return(c(chrom, start_pos, end_pos, He))
+                                             })
+
+    # Bind results per window into a data frame
+    He_windows <- as.data.frame(do.call("rbind", window_results))
+    colnames(He_windows) <- c("Chromosome", "Start", "End", "He")
+    return(He_windows)
+  }
+}
+
+
 #' Pi
 #'
 #' This function calculates the nucleotide diversity (Pi) for a sample in a VCF file as defined by Nei & Li, 1979 (https://doi.org/10.1073/pnas.76.10.5269).
@@ -508,14 +592,12 @@ Heterozygosity <- function(vcf_path, batch_size = 10000, threads = 1, write_log 
 #' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'Pi', representing the nucleotide diversity within each window.
 #'
 #' @examples
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' total_sequence_length <- 999299  # Total length of the sequence in vcf
+#' vcf_path <- "path/to/your/vcf/file"
+#' total_sequence_length <- 265392  # Total length of the sequence
 #' # Batch mode example
-#' pi_value <- Pi(vcf_file, total_sequence_length)
+#' pi_value <- Pi(vcf_path, total_sequence_length)
 #' # Window mode example
-#' pi_windows <- Pi(vcf_file, seq_length = total_sequence_length,
-#'                  window_size = 100000, skip_size = 50000)
+#' pi_windows <- Pi(vcf_path, seq_length = total_sequence_length, window_size = 100000, skip_size = 50000)
 #'
 #' @export
 
@@ -532,7 +614,7 @@ Pi <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log 
                                             write_log = write_log,
                                             logfile = logfile,
                                             exclude_ind = exclude_ind,
-                                            custom_function = function(index, fix, sep_gt,pop1_individuals = NULL, pop2_individuals = NULL, ploidy = 2) {
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                               sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
                                               N_mismatches_batch <- as.numeric(0)
                                               N_comparisons_batch <- as.numeric(0)
@@ -648,16 +730,13 @@ Pi <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log 
 #' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'TajimasD', representing Tajima's D within each window.
 #'
 #' @examples
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' total_sequence_length <- 999299  # Total length of the sequence
+#' vcf_path <- "path/to/your/vcf/file"
+#' total_sequence_length <- 265392  # Total length of the sequence
 #' # Batch mode example
-#' tajimas_d <- TajimasD(vcf_file, total_sequence_length)
+#' tajimas_d <- TajimasD(vcf_path, total_sequence_length)
 #' # Window mode example
-#' tajimas_d_windows <- TajimasD(vcf_file, seq_length = total_sequence_length,
-#'                               window_size = 100000, skip_size = 50000)
+#' tajimas_d_windows <- TajimasD(vcf_path, seq_length = total_sequence_length, window_size = 100000, skip_size = 50000)
 #'
-#' @importFrom stats na.omit
 #' @export
 
 TajimasD <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
@@ -673,7 +752,7 @@ TajimasD <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, writ
                                             write_log = write_log,
                                             logfile = logfile,
                                             exclude_ind = exclude_ind,
-                                            custom_function = function(index, fix, sep_gt,pop1_individuals = NULL, pop2_individuals = NULL, ploidy = 2) {
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                               sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
                                               num_chroms <- ncol(sep_gt)
                                               n <- num_chroms  # Number of chromosomes
@@ -837,16 +916,13 @@ TajimasD <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, writ
 #' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'WattersonsTheta', representing Watterson's theta within each window normalized by the window length.
 #'
 #' @examples
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' total_sequence_length <- 999299  # Total length of the sequence
+#' vcf_path <- "path/to/your/vcf/file"
+#' total_sequence_length <- 265392  # Total length of the sequence
 #' # Batch mode example
-#' wattersons_theta <- WattersonsTheta(vcf_file, total_sequence_length)
+#' wattersons_theta <- WattersonsTheta(vcf_path, total_sequence_length)
 #' # Window mode example
-#' wattersons_theta_windows <- WattersonsTheta(vcf_file, seq_length = total_sequence_length,
-#'                                             window_size = 100000, skip_size = 50000)
+#' wattersons_theta_windows <- WattersonsTheta(vcf_path, seq_length = total_sequence_length, window_size = 100000, skip_size = 50000)
 #'
-#' @importFrom stats na.omit
 #' @export
 
 WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 1, write_log = FALSE, logfile = "log.txt", window_size = NULL, skip_size = NULL, exclude_ind = NULL) {
@@ -862,7 +938,7 @@ WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 
                                             write_log = write_log,
                                             logfile = logfile,
                                             exclude_ind = exclude_ind,
-                                            custom_function = function(index, fix, sep_gt,pop1_individuals = NULL, pop2_individuals = NULL, ploidy = 2) {
+                                            custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                               sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
 
                                               # Calculate segregating sites (S) for the batch
@@ -957,16 +1033,14 @@ WattersonsTheta <- function(vcf_path, seq_length, batch_size = 10000, threads = 
 #' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'Dxy', representing the average nucleotide differences within each window.
 #'
 #' @examples
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' pop1_individuals <- c("tsk_0", "tsk_1", "tsk_2")
-#' pop2_individuals <- c("tsk_3", "tsk_4", "tsk_5")
-#' total_sequence_length <- 999299  # Total length of the sequence
+#' vcf_path <- "path/to/your/vcf/file"
+#' pop1_individuals <- c("8449", "8128", "8779")
+#' pop2_individuals <- c("8816", "8823", "8157")
+#' total_sequence_length <- 265392  # Total length of the sequence
 #' # Batch mode example
-#' dxy_value <- Dxy(vcf_file, pop1_individuals, pop2_individuals, total_sequence_length)
+#' dxy_value <- Dxy(vcf_path, pop1_individuals, pop2_individuals, total_sequence_length)
 #' # Window mode example
-#' dxy_windows <- Dxy(vcf_file, pop1_individuals, pop2_individuals, seq_length = total_sequence_length,
-#'                    window_size = 100000, skip_size = 50000)
+#' dxy_windows <- Dxy(vcf_path, pop1_individuals, pop2_individuals, seq_length = total_sequence_length, window_size = 100000, skip_size = 50000)
 #'
 #' @export
 
@@ -984,7 +1058,7 @@ Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_
                                             logfile = logfile,
                                             pop1_individuals = pop1_individuals,
                                             pop2_individuals = pop2_individuals,
-                                            custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals, ploidy = 2) {
+                                            custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                               # Separate populations
                                               sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
                                               pop1_genotypes <- sep$pop1
@@ -1101,15 +1175,13 @@ Dxy <- function(vcf_path, pop1_individuals, pop2_individuals, seq_length, batch_
 #' In window mode (window_size and skip_size provided): A data frame with columns 'Chromosome', 'Start', 'End', and 'Fst', representing the fixation index within each window.
 #'
 #' @examples
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' pop1_individuals <- c("tsk_0", "tsk_1", "tsk_2")
-#' pop2_individuals <- c("tsk_3", "tsk_4", "tsk_5")
+#' vcf_path <- "path/to/your/vcf/file"
+#' pop1_individuals <- c("8449", "8128", "8779")
+#' pop2_individuals <- c("8816", "8823", "8157")
 #' # Batch mode example
-#' fst_value <- Fst(vcf_file, pop1_individuals, pop2_individuals, weighted = TRUE)
+#' fst_value <- Fst(vcf_path, pop1_individuals, pop2_individuals, weighted = TRUE)
 #' # Window mode example
-#' fst_windows <- Fst(vcf_file, pop1_individuals, pop2_individuals, weighted = TRUE,
-#'                    window_size = 100000, skip_size = 50000)
+#' fst_windows <- Fst(vcf_path, pop1_individuals, pop2_individuals, weighted = TRUE, window_size = 100000, skip_size = 50000)
 #'
 #' @export
 
@@ -1127,7 +1199,7 @@ Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, 
                                             logfile = logfile,
                                             pop1_individuals = pop1_individuals,
                                             pop2_individuals = pop2_individuals,
-                                            custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals, ploidy = 2) {
+                                            custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                               # Separate populations
                                               sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
                                               genotype_matrix1 <- sep$pop1
@@ -1378,9 +1450,8 @@ Fst <- function(vcf_path, pop1_individuals, pop2_individuals, weighted = FALSE, 
 #' @return Site frequency spectrum as a named vector
 #'
 #' @examples
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' sfs <- OneDimSFS(vcf_file, folded = FALSE)
+#' vcf_path <- "path/to/your/vcf/file"
+#' sfs <- OneDimSFS(vcf_path, folded = FALSE)
 #'
 #' @export
 
@@ -1392,7 +1463,7 @@ OneDimSFS <- function(vcf_path, folded = FALSE, batch_size = 10000, threads = 1,
                                           write_log = write_log,
                                           logfile = logfile,
                                           exclude_ind = exclude_ind,
-                                          custom_function = function(index, fix, sep_gt,pop1_individuals = NULL, pop2_individuals = NULL, ploidy = 2) {
+                                          custom_function = function(index, fix, sep_gt, pop1_individuals = NULL, pop2_individuals = NULL) {
                                             sep_gt[sep_gt == "."] <- NA  # Replace '.' with NA for missing data
                                             num_individuals <- ncol(sep_gt)
 
@@ -1458,11 +1529,10 @@ OneDimSFS <- function(vcf_path, folded = FALSE, batch_size = 10000, threads = 1,
 #' @return Two-dimensional site frequency spectrum as a matrix.
 #'
 #' @examples
-#' vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-#' index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-#' pop1_individuals <- c("tsk_0", "tsk_1", "tsk_2")
-#' pop2_individuals <- c("tsk_3", "tsk_4", "tsk_5")
-#' sfs_2d <- TwoDimSFS(vcf_file, pop1_individuals, pop2_individuals, folded = TRUE)
+#' vcf_path <- "path/to/your/vcf/file"
+#' pop1_individuals <- c("8449", "8128", "8779")
+#' pop2_individuals <- c("8816", "8823", "8157")
+#' sfs_2d <- TwoDimSFS(vcf_path, pop1_individuals, pop2_individuals, folded = TRUE)
 #'
 #' @export
 
@@ -1476,7 +1546,7 @@ TwoDimSFS <- function(vcf_path, pop1_individuals, pop2_individuals, folded = FAL
                                           exclude_ind = exclude_ind,
                                           pop1_individuals = pop1_individuals,
                                           pop2_individuals = pop2_individuals,
-                                          custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals, ploidy = 2) {
+                                          custom_function = function(index, fix, sep_gt,pop1_individuals = pop1_individuals, pop2_individuals = pop2_individuals) {
                                             # Separate populations
                                             sep <- separateByPopulations(sep_gt, pop1_names = pop1_individuals, pop2_names = pop2_individuals, rm_ref_alleles = FALSE)
                                             genotype_matrix1 <- sep$pop1

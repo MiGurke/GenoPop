@@ -54,13 +54,11 @@ For batch processing, it uses \code{process_vcf_in_batches}. For windowed analys
 approach tailored to process specific genomic windows (\code{process_vcf_in_windows}).
 }
 \examples{
-vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-total_sequence_length <- 999299  # Total length of the sequence in vcf
+vcf_path <- "path/to/your/vcf/file"
+total_sequence_length <- 265392  # Total length of the sequence
 # Batch mode example
-pi_value <- Pi(vcf_file, total_sequence_length)
+pi_value <- Pi(vcf_path, total_sequence_length)
 # Window mode example
-pi_windows <- Pi(vcf_file, seq_length = total_sequence_length,
-                 window_size = 100000, skip_size = 50000)
+pi_windows <- Pi(vcf_path, seq_length = total_sequence_length, window_size = 100000, skip_size = 50000)
 
 }

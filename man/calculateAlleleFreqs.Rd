@@ -16,4 +16,9 @@ A data frame containing allele frequencies for each variant.
 This function calculates allele frequencies from a genotype matrix (sep_gt) for each variant.
 It is designed to be used within the batch or window processing framework of \code{process_vcf_in_batches} and \code{process_vcf_in_windows}.
 }
+\examples{
+sep_gt <- ... # Obtain this from a batch processed by `process_vcf_in_batches`
+allele_freqs <- calculateAlleleFreqs(sep_gt)
+
+}
 \keyword{internal}

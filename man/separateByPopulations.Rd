@@ -29,4 +29,12 @@ A list containing two data frames, one for each population.
 This function separates a genotype matrix into two data frames based on population assignments.
 It's designed to work with the batches or windows processed by \code{process_vcf_in_batches} and \code{process_vcf_in_windows}.
 }
+\examples{
+sep_gt <- matrix(...) # Example genotype matrix
+pop1_names <- c("Individual1", "Individual2", ...)
+pop2_names <- c("Individual5", "Individual6", ...)
+
+separated_data <- separateByPopulations(sep_gt, pop1_names, pop2_names)
+
+}
 \keyword{internal}

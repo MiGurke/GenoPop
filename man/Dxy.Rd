@@ -14,7 +14,8 @@ Dxy(
   write_log = FALSE,
   logfile = "log.txt",
   window_size = NULL,
-  skip_size = NULL
+  skip_size = NULL,
+  exclude_ind = NULL
 )
 }
 \arguments{
@@ -40,6 +41,10 @@ When specified, \code{skip_size} must also be provided.}
 
 \item{skip_size}{Number of base pairs to skip between windows (optional).
 Used in conjunction with \code{window_size} for windowed analysis.}
+
+\item{exclude_ind}{Optional vector of individual IDs to exclude from the analysis.
+If provided, the function will remove these individuals from the genotype matrix
+before applying the custom function. Default is NULL, meaning no individuals are excluded.}
 }
 \value{
 In batch mode (no window_size or skip_size provided): The average number of nucleotide substitutions per site between the individuals of two populations (Dxy).
@@ -54,15 +59,13 @@ For batch processing, it uses \code{process_vcf_in_batches}. For windowed analys
 approach tailored to process specific genomic windows (\code{process_vcf_in_windows}).
 }
 \examples{
-vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-pop1_individuals <- c("tsk_0", "tsk_1", "tsk_2")
-pop2_individuals <- c("tsk_3", "tsk_4", "tsk_5")
-total_sequence_length <- 999299  # Total length of the sequence
+vcf_path <- "path/to/your/vcf/file"
+pop1_individuals <- c("8449", "8128", "8779")
+pop2_individuals <- c("8816", "8823", "8157")
+total_sequence_length <- 265392  # Total length of the sequence
 # Batch mode example
-dxy_value <- Dxy(vcf_file, pop1_individuals, pop2_individuals, total_sequence_length)
+dxy_value <- Dxy(vcf_path, pop1_individuals, pop2_individuals, total_sequence_length)
 # Window mode example
-dxy_windows <- Dxy(vcf_file, pop1_individuals, pop2_individuals, seq_length = total_sequence_length,
-                   window_size = 100000, skip_size = 50000)
+dxy_windows <- Dxy(vcf_path, pop1_individuals, pop2_individuals, seq_length = total_sequence_length, window_size = 100000, skip_size = 50000)
 
 }

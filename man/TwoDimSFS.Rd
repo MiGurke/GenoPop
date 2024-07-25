@@ -46,10 +46,9 @@ This function calculates a two-dimensional site frequency spectrum from a VCF fi
 The user can decide between a folded or unfolded spectrum.
 }
 \examples{
-vcf_file <- system.file("tests/testthat/sim.vcf.gz", package = "GenoPop")
-index_file <- system.file("tests/testthat/sim.vcf.gz.tbi", package = "GenoPop")
-pop1_individuals <- c("tsk_0", "tsk_1", "tsk_2")
-pop2_individuals <- c("tsk_3", "tsk_4", "tsk_5")
-sfs_2d <- TwoDimSFS(vcf_file, pop1_individuals, pop2_individuals, folded = TRUE)
+vcf_path <- "path/to/your/vcf/file"
+pop1_individuals <- c("8449", "8128", "8779")
+pop2_individuals <- c("8816", "8823", "8157")
+sfs_2d <- TwoDimSFS(vcf_path, pop1_individuals, pop2_individuals, folded = TRUE)
 
 }
